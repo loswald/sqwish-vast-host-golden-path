@@ -4,8 +4,6 @@ This folder is a conservative operating kit for a **dedicated physical GPU host 
 
 Read [`docs/RUNBOOK.md`](docs/RUNBOOK.md) before touching a host.
 
-**Do not use this kit to host on a third-party cloud VM unless that provider has given prior written approval for both third-party hosting and the resulting workloads.** A September 2026 cloud-VM trial admitted a roughly four-minute miner workload that disappeared between five-minute polls and triggered a cryptocurrency-abuse case. Read [`docs/INCIDENT-CLOUD-MINER.md`](docs/INCIDENT-CLOUD-MINER.md) before evaluating any non-owned infrastructure.
-
 The completed two-A100 setup, hard storage cap, controlled outside-client reclaim, failed automatic resume, and reliability gate are recorded in [`docs/A100-2X-LIVE-TRIAL.md`](docs/A100-2X-LIVE-TRIAL.md). Sanitized measurements are in [`evidence/2026-09-02-a100-reclaim/`](evidence/2026-09-02-a100-reclaim/).
 
 Use [`docs/CONTROLLED-2H-2XA100-TRIAL.md`](docs/CONTROLLED-2H-2XA100-TRIAL.md) for the exact two-hour separate-client, Host Job, owner-preemption, slicing, rating-observation, and cleanup procedure.
