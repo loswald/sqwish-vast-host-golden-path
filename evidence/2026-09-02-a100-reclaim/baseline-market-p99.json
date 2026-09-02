@@ -1,0 +1,10 @@
+{
+  "max_renter_machine_hour": 1.6,
+  "median_renter_machine_hour": 1.066667,
+  "min_renter_machine_hour": 0.8,
+  "p95_renter_machine_hour": 1.6,
+  "p99_host_price_min_bid_per_gpu_hour": 0.6000000000000001,
+  "p99_renter_machine_hour": 1.6,
+  "p99_renter_per_gpu_hour": 0.8,
+  "sample_size_unique_machines": 7
+}

@@ -1,6 +1,6 @@
 # Vast.ai owned-host golden-path runbook
 
-> **Scope:** A dedicated physical GPU server under full operator control that may be offered cheaply to interruptible bidders while the owner is idle, then reclaimed through Vast's scheduler for the owner's own on-demand instance. This is an operations runbook, not a promise of earnings or a promise that preemption has zero rating impact.
+> **Scope:** A dedicated physical GPU server under full operator control that may be offered cheaply to interruptible bidders, then reclaimed through Vast's documented Host Job scheduler path. The measured two-A100 cycle failed automatic renter return and the rating-safety gate. Owner-created on-demand reclaim remains experimental. This runbook is not a promise of earnings or safe preemption.
 >
 > **Source convention:** **Verified** means an official Vast document, the current Host Setup page, or the current official installer/uninstaller was checked. **Inferred** means the workflow combines separately documented features and still needs one controlled end-to-end trial.
 
@@ -11,7 +11,7 @@ Do not list the machine until everyone responsible for it accepts these facts:
 1. **Verified limitation:** Vast has no documented `interruptible-only` host switch. `vastai list machine` exposes both an on-demand GPU price and an optional interruptible minimum bid. A very high on-demand price can make outside on-demand rental unattractive, but cannot make it impossible.
 2. **Verified contract rule:** A client rental locks the price, hardware specifications, and offer end date. Repricing, shortening the offer, or unlisting affects future rentals only. It does not end an existing contract.
 3. **Verified priority rule:** On-demand and reserved instances have priority over interruptible instances. An interruptible instance may be paused when on-demand is requested; its data remains, and it resumes when it regains priority.
-4. **Inferred reclaim workflow:** Starting a pre-created owner on-demand instance on the same machine should pause an outside interruptible instance. Stopping that owner instance should return priority; fresh create/destroy is the fallback. The bidder should resume automatically if it is still the winning bid. Vast documents each component, but does not explicitly publish a host-specific "reclaim with no rating effect" guarantee. Validate this once under controlled conditions before relying on it.
+4. **Measured Host Job limitation:** A controlled two-A100 Host Job reclaimed both GPUs through Vast's scheduler, but the interruptible client did not auto-resume within more than 79 seconds after release and needed its own Start action. A separate owner on-demand reclaim remains experimental. Vast does not publish a host-specific "reclaim with no rating effect" guarantee, and the measured cycle included a confounded reliability decrease. Keep production reclaim disabled until a clean dedicated-hardware trial passes every acceptance criterion below.
 5. **Verified maintenance rule:** Unlisting, taking the host offline, restarting Docker, killing a renter container, or using maintenance notice is not the reclaim mechanism. Vast says all rental contracts must be honored and machines should remain online.
 
 If strictly preventing all outside on-demand or reserved rentals is a hard requirement, stop here. The current documented host controls cannot guarantee it.
@@ -356,12 +356,13 @@ Do not wait for an unknown public renter to validate reclaim. Vast's official ho
 
 1. Keep the machine in the dedicated host account. Stage an official Host Job below the planned client bid, and create the stopped owner on-demand test standby while vacant.
 2. Create and authenticate a separate operator-controlled client account, add enough credit for the short test, and prepare its exact-machine CLI search/create commands.
-3. For the first test, set `min_chunk` to the full GPU count and have the controlled client request every exposed GPU. Sample P99 from bid-offer `min_bid`, which is the renter-facing whole-machine hourly total. Convert that total to host `price_min_bid` per GPU before listing: at the currently observed four-thirds renter surcharge, `host floor = renter P99 * 0.75 / GPU count`. Re-derive the live factor from the exact offer. A percentile price is a deterrent, not an allowlist.
-4. List only when the client command is ready. Search by exact machine ID, verify the exact offer's machine-total `min_bid`, create the controlled interruptible instance immediately with a whole-machine `--bid_price` above it, and verify the returned instance belongs to the intended machine and has the full GPU allocation. Never multiply the offer's `min_bid` by GPU count.
+3. For the first test, set `min_chunk` to the full GPU count and have the controlled client request every exposed GPU. Sample P99 from bid-offer `min_bid`, which is the renter-facing whole-machine hourly total. Convert that total to host `price_min_bid` per GPU before listing: at the currently observed four-thirds renter surcharge, `host floor = renter P99 * 0.75 / GPU count`. Re-derive the live factor from the exact offer. The recorded two-A100 snapshot was `$1.60/machine-hour`, so its two-GPU host floor was `$0.60/GPU-hour`. A percentile price is a deterrent, not an allowlist.
+4. List only when the client command is ready. Search by exact machine ID, verify the exact offer's machine-total `min_bid`, create the controlled interruptible instance immediately with a whole-machine `--bid_price` above it, and verify the returned instance belongs to the intended machine and has the full GPU allocation. The recorded test used `--bid_price 1.61` against `min_bid=1.60`. Never multiply the offer's `min_bid` by GPU count.
 5. Unlist the machine as soon as that controlled contract is proven running. Unlisting now blocks any further contracts while preserving the controlled test contract.
-6. First raise the Host Job above the controlled client bid, measure platform pause/reclaim, then lower it and measure client auto-resume. Record how many GPUs the Host Job actually receives; its API has no explicit GPU-count parameter.
-7. Separately start the exact pre-created owner on-demand test standby, measure platform pause/reclaim, stop it, and measure controlled-client auto-resume.
-8. Destroy the controlled client instance, clear its storage, and keep the host unlisted while reviewing the evidence.
+6. The live two-A100 test found that Host Jobs remained inert while the machine was unlisted and scheduled only after relisting. Under the same guarded full-GPU listing, relisting produced two one-GPU jobs. A host input of `$1.30/GPU-hour` appeared as `dph_base=$1.733333` on each and preempted the `$1.61/machine-hour` two-GPU client; `$0.65/GPU-hour` appeared as `$0.866667` each and did not. Treat this only as measured behavior, not a scheduler formula. Watch continuously for unexpected contracts during the required relist window.
+7. After reclaim, lower the Host Job and measure resume. In the live test the client did not auto-resume within more than 79 seconds and required the controlled client's **Start** action. Record this as a failed automatic-resume threshold even when guarded Start recovers it.
+8. Separately start the exact pre-created owner on-demand test standby, measure platform pause/reclaim, stop it, and measure controlled-client resume with the same guarded Start fallback.
+9. Destroy the controlled client instance, clear its storage, and keep the host unlisted while reviewing the evidence. If reliability changes during failed-container and reclaim events, preserve both timelines and make no rating-safety claim because the causes are confounded.
 
 There remains a short race between listing and controlled acquisition because Vast exposes no documented private or account-allowlisted offer. Abort and honor the contract if any unexpected client wins first. On a sliced multi-GPU test, fill every exposed slice from controlled client accounts before unlisting; never leave an advertised GPU available to an unknown client.
 
@@ -393,14 +394,16 @@ vastai set defjob <MACHINE_ID> \
   --price_inetu 0 \
   --price_inetd 0 \
   --image <OWNER_WORKLOAD_IMAGE> \
-  --args <OWNER_ARGUMENTS>
+  --args /bin/bash -lc '<OWNER_COMMAND>'
 ```
 
 `--args` consumes the remainder of the command and must be last. Inspect `vastai show machines --raw` for the default-job fields. `remove defjob` deletes the job; it is not a pause/release control and storage persistence across deletion is undocumented.
 
-The Host Job API has no GPU-count parameter. Do not assume one job on a multi-GPU machine gets one GPU or every GPU. The two-hour trial must measure `CUDA_VISIBLE_DEVICES` and `nvidia-smi -L`, and must abort on overlapping assignment.
+The Host Job API has no GPU-count parameter. Do not assume one job on a multi-GPU machine gets one GPU or every GPU. The two-A100 run produced two one-GPU Host Job records, but that fan-out is not guaranteed on other topologies. It also found that Host Jobs scheduled only after the machine was relisted. The two-hour trial must measure `CUDA_VISIBLE_DEVICES` and `nvidia-smi -L`, and must abort on overlapping assignment.
 
-Host Jobs cannot preempt outside on-demand or reserved rentals. They can only win over lower interruptible bids. Vast does not promise zero rating impact for an operator-triggered bid change, so keep the same immediate and delayed rating checks.
+The observed high/low values were asymmetric with the client's whole-machine bid: host `$1.30/GPU-hour` became renter-side `dph_base=$1.733333` on each one-GPU Host Job and preempted a two-GPU client bidding `$1.61/machine-hour`; host `$0.65/GPU-hour` became `$0.866667` per job and did not. Do not encode those observations as a general comparison formula. After lowering the owner jobs, the client remained stopped for more than 79 seconds and needed client **Start**. Until a repeat proves otherwise, the release controller must detect this state, fail the automatic-resume target, and use only the exact controlled client's guarded Start action.
+
+Host Jobs cannot preempt outside on-demand or reserved rentals. They can only win over lower interruptible bids. Vast does not promise zero rating impact for an operator-triggered bid change, so keep the same immediate and delayed rating checks. The live run recorded a reliability decrease during a cycle that also contained a failed container launch; that confounding prevents attribution and supports no rating-safety claim.
 
 ### Experimental on-demand reclaim
 

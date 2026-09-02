@@ -553,13 +553,13 @@ export function GpuEconomicsLab() {
               <CardTitle className="flex items-center gap-2">
                 <ServerCog className="size-4 text-primary" /> Proof status
               </CardTitle>
-              <CardDescription>What the one-GPU qualification host has actually demonstrated.</CardDescription>
+              <CardDescription>What the controlled one- and two-GPU qualification runs actually demonstrated.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="proof-row proof-pass"><ArrowUpRight /> Host self-test and 1-GPU standby start/stop</div>
-              <div className="proof-row proof-pass"><ArrowUpRight /> Owner GPU billing reported $0/hour</div>
-              <div className="proof-row proof-open"><ArrowDownRight /> Outside-renter pause and resume still open</div>
-              <div className="proof-row proof-open"><ArrowDownRight /> Repeated reclaim rating impact still open</div>
+              <div className="proof-row proof-pass"><ArrowUpRight /> Host self-test and owner GPU workloads passed</div>
+              <div className="proof-row proof-pass"><ArrowUpRight /> Controlled 2-GPU renter reclaimed in about 2.82 seconds</div>
+              <div className="proof-row proof-open"><ArrowDownRight /> Automatic renter return failed after more than 79 seconds</div>
+              <div className="proof-row proof-open"><ArrowDownRight /> Rating-safety gate failed; reliability drop was confounded</div>
             </CardContent>
           </Card>
         </section>

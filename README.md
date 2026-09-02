@@ -1,12 +1,12 @@
 # Vast owned-host golden path
 
-This folder is a conservative operating kit for a **dedicated physical GPU host under the operator's full control**. Its specific experiment is to sell idle GPU time to interruptible bidders, reclaim the GPU with an owner-created on-demand Vast instance, and release it so the bidder can resume through Vast's scheduler.
+This folder is a conservative operating kit for a **dedicated physical GPU host under the operator's full control**. Its specific experiment is to sell idle GPU time to interruptible bidders and reclaim it through Vast's documented Host Job scheduler path. The controlled two-A100 trial proved rapid reclaim but failed automatic renter return and the rating-safety gate; owner-created on-demand reclaim remains a separate experiment.
 
 Read [`docs/RUNBOOK.md`](docs/RUNBOOK.md) before touching a host.
 
 **Do not use this kit to host on a third-party cloud VM unless that provider has given prior written approval for both third-party hosting and the resulting workloads.** A September 2026 cloud-VM trial admitted a roughly four-minute miner workload that disappeared between five-minute polls and triggered a cryptocurrency-abuse case. Read [`docs/INCIDENT-CLOUD-MINER.md`](docs/INCIDENT-CLOUD-MINER.md) before evaluating any non-owned infrastructure.
 
-The completed two-A100 setup, hard storage cap, price display, vacant-host checks, and still-pending outside-renter reclaim evidence are recorded in [`docs/A100-2X-LIVE-TRIAL.md`](docs/A100-2X-LIVE-TRIAL.md).
+The completed two-A100 setup, hard storage cap, controlled outside-client reclaim, failed automatic resume, and reliability gate are recorded in [`docs/A100-2X-LIVE-TRIAL.md`](docs/A100-2X-LIVE-TRIAL.md). Sanitized measurements are in [`evidence/2026-09-02-a100-reclaim/`](evidence/2026-09-02-a100-reclaim/).
 
 Use [`docs/CONTROLLED-2H-2XA100-TRIAL.md`](docs/CONTROLLED-2H-2XA100-TRIAL.md) for the exact two-hour separate-client, Host Job, owner-preemption, slicing, rating-observation, and cleanup procedure.
 
@@ -18,7 +18,7 @@ Use [`docs/ECONOMICS.md`](docs/ECONOMICS.md) for the current ex-VAT 18-period mo
 
 Vast has no documented host switch that makes a listing strictly interruptible-only. A high on-demand price can discourage outside on-demand rental but cannot prevent it. If an outside on-demand or reserved contract appears, the owner workload must wait and the locked contract must be honored.
 
-Vast's documented production mechanism for owner workloads is a Host Job (`set defjob`). It is a background bid: raising it above an interruptible client should pause that client, and lowering it should let the client resume. It cannot preempt on-demand or reserved work, and the current API exposes no explicit GPU-count control.
+Vast's documented production mechanism for owner workloads is a Host Job (`set defjob`). It is a background bid: raising it above an interruptible client can pause that client. In the controlled two-A100 trial, lowering the Host Job did not resume the client automatically within 79 seconds; the separate client account had to issue Start. A public renter cannot be recovered this way by the host. Host Jobs cannot preempt on-demand or reserved work, and the current API exposes no explicit GPU-count control.
 
 The stronger stopped owner on-demand path remains a controlled reclaim experiment until Vast confirms it is acceptable for ongoing team workloads. It reserves the owner's disk before any tenant arrives:
 
@@ -36,7 +36,8 @@ Unlisting, stopping the daemon, restarting Docker, powering off, killing contain
 
 - `docs/RUNBOOK.md` — complete setup, listing, reclaim, maintenance, payout, cleanup, and troubleshooting guide.
 - `docs/TRIAL-NOTES.md` — sanitized trial record template.
-- `docs/A100-2X-LIVE-TRIAL.md` — evidence from the live two-A100 storage, pricing, qualification, and standby trial, with the outside-renter reclaim result kept explicitly pending.
+- `docs/A100-2X-LIVE-TRIAL.md` — evidence from the live two-A100 storage, pricing, qualification, controlled reclaim, resume, reliability, cost, and teardown trial.
+- `evidence/2026-09-02-a100-reclaim/` — sanitized state-transition and pricing measurements from that controlled trial.
 - `docs/CONTROLLED-2H-2XA100-TRIAL.md` — exact two-hour controlled-client test for Host Job and owner on-demand reclaim, pause/resume, slicing, rating observation, and cleanup.
 - `docs/SCAN-4X-RTX-PRO-6000-PILOT.md` — one-week technical qualification and staged 4-GPU reclaim plan for the published SCAN candidate.
 - `docs/ECONOMICS.md` — SCAN commitment, Vast price/fill, and research-team allocation scenarios with primary sources.

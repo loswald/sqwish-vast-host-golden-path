@@ -1,0 +1,69 @@
+{
+  "trial": "controlled two-account 2x A100 interruptible reclaim",
+  "date_utc": "2026-09-02",
+  "hardware": {
+    "gpu_count": 2,
+    "gpu_model": "A100 SXM4 40GB",
+    "verification_before": "unverified"
+  },
+  "market": {
+    "comparable_unique_machines": 7,
+    "p99_renter_machine_hour_usd": 1.6,
+    "host_floor_per_gpu_hour_usd": 0.6,
+    "client_bid_machine_hour_usd": 1.61
+  },
+  "controlled_contract": {
+    "image": "vastai/test:self-test-cuda-13.0",
+    "disk_gb": 10,
+    "listing_window_seconds": 13.303551,
+    "fixed_end_epoch_verified": false,
+    "fixed_end_deviation": "The final offer reported null duration and end_date; a dedicated-hardware repeat must set and verify the fixed end before listing.",
+    "unknown_renters_admitted": 0,
+    "direct_client_spend_usd": 0.10394347623,
+    "remaining_client_credit_usd": 9.89605652377
+  },
+  "reclaim": {
+    "owner_host_job_low_per_gpu_hour_usd": 0.65,
+    "owner_host_job_low_renter_dph_base_each_usd": 0.8666666666666667,
+    "low_bid_preempted": false,
+    "owner_host_job_high_per_gpu_hour_usd": 1.3,
+    "owner_host_job_high_renter_dph_base_each_usd": 1.7333333333333334,
+    "high_bid_preempted": true,
+    "relist_to_client_stopped_seconds": 2.82157,
+    "host_job_requires_active_listing_observed": true,
+    "owner_jobs": 2,
+    "gpus_per_owner_job": 1,
+    "corrected_owner_gpu_burn_ok": true
+  },
+  "resume": {
+    "owner_host_job_lowered_at_utc": "2026-09-02T05:09:51.9061885Z",
+    "automatic_resume_observed": false,
+    "automatic_resume_wait_seconds": 79.6048367,
+    "manual_client_start_at_utc": "2026-09-02T05:11:11.5110242Z",
+    "manual_start_to_running_state_seconds": 3.3746748,
+    "same_contract_resumed": true,
+    "both_gpus_returned_to_100_percent": true
+  },
+  "reliability": {
+    "before": 0.5999925,
+    "after_failed_owner_start_and_reclaim": 0.5727243,
+    "absolute_drop": 0.0272682,
+    "relative_drop_percent": 4.5447568,
+    "after_corrected_cycle": 0.5727243,
+    "reports_before": 0,
+    "reports_after": 0,
+    "attribution": "Confounded by two malformed owner-container launch failures and platform update timing; does not establish that a clean preemption is rating-safe."
+  },
+  "cleanup": {
+    "client_contract_destroyed": true,
+    "client_api_key_revoked": true,
+    "client_ssh_key_revoked": true,
+    "host_unlisted": true,
+    "host_job_removed": true,
+    "vast_machine_record_deleted": true,
+    "cloud_trial_vm_deleted": true,
+    "cloud_attached_disks_deleted": true,
+    "cloud_static_ip_deleted": true,
+    "cloud_firewall_rule_deleted": true
+  }
+}

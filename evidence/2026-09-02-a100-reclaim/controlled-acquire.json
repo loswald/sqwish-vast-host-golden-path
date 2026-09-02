@@ -1,0 +1,96 @@
+{
+  "baseline": {
+    "captured_at": "2026-09-02T05:03:24.307213+00:00",
+    "current_rentals_running": 0,
+    "listed": false,
+    "num_recent_reports": null,
+    "num_reports": null,
+    "reliability2": 0.5999925,
+    "verification": "unverified"
+  },
+  "client_instance_id": "[redacted-id]",
+  "create_response": {
+    "instance_api_key": "[redacted]",
+    "new_contract": "[redacted-id]",
+    "success": true
+  },
+  "created_at": "2026-09-02T05:03:37.635904+00:00",
+  "finished_at": "2026-09-02T05:03:39.496001+00:00",
+  "host_id": "[redacted-id]",
+  "image": "vastai/test:self-test-cuda-13.0",
+  "label": "[redacted-label]",
+  "listed_at": "2026-09-02T05:03:26.192450+00:00",
+  "listing_response": {
+    "results": [
+      {
+        "extended": 0,
+        "machine_id": "[redacted-id]",
+        "new_contracts": [
+          "[redacted-id]"
+        ],
+        "upd_contracts": [],
+        "user_id": "[redacted-id]"
+      }
+    ],
+    "success": true,
+    "you_sent": {
+      "credit_discount_max": 0.0,
+      "duration": null,
+      "end_date": null,
+      "machine": "[redacted-id]",
+      "min_chunk": 2,
+      "price_disk": 0.15,
+      "price_gpu": 1.6,
+      "price_inetd": 0.0,
+      "price_inetu": 0.0,
+      "price_min_bid": 0.6,
+      "vol_price": null,
+      "vol_size": 0
+    }
+  },
+  "machine_id": "[redacted-id]",
+  "offer": {
+    "captured_at": "2026-09-02T05:03:35.657068+00:00",
+    "client_bid_renter_machine_hour": 1.61,
+    "disk_space": 222.0,
+    "min_bid_renter_machine_hour": 1.5999999999999999,
+    "num_gpus": 2,
+    "offer_id": "[redacted-id]",
+    "rentable": true
+  },
+  "started_at": "2026-09-02T05:03:18.552089+00:00",
+  "unlist_response": "all offers for machine [redacted-id] removed, machine delisted.\n",
+  "unlist_returncode": 0,
+  "unlisted_at": "2026-09-02T05:03:39.496001+00:00",
+  "visibility_checks": [
+    {
+      "at": "2026-09-02T05:03:28.067052+00:00",
+      "matching_count": 0,
+      "raw_count": 0,
+      "raw_offer_summary": []
+    },
+    {
+      "at": "2026-09-02T05:03:31.854693+00:00",
+      "matching_count": 0,
+      "raw_count": 0,
+      "raw_offer_summary": []
+    },
+    {
+      "at": "2026-09-02T05:03:35.657068+00:00",
+      "matching_count": 1,
+      "raw_count": 1,
+      "raw_offer_summary": [
+        {
+          "host_id": "[redacted-id]",
+          "id": "[redacted-id]",
+          "is_bid": false,
+          "machine_id": "[redacted-id]",
+          "min_bid": 1.5999999999999999,
+          "num_gpus": 2,
+          "rentable": true,
+          "rented": false
+        }
+      ]
+    }
+  ]
+}

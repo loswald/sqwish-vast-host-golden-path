@@ -1,0 +1,11 @@
+{
+  "record_type": "sanitized manually checked observation",
+  "observed_at_utc": "2026-09-02T05:12:21Z",
+  "same_stored_contract": true,
+  "client_actual_status": "running",
+  "client_intended_status": "running",
+  "client_cur_state": "running",
+  "gpu_count": 2,
+  "gpu_utilization_percent_each": [100, 100],
+  "note": "Confirmed after the scheduler-only transition at the end of resume-poll.json; identifiers and addresses are omitted."
+}

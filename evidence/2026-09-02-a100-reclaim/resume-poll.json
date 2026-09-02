@@ -1,0 +1,576 @@
+[
+  {
+    "at": "2026-09-02T05:09:58.396161+00:00",
+    "client": {
+      "actual_status": "exited",
+      "cur_state": "stopped",
+      "duration": 382.93192648887634,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": null,
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": null,
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:05.052237+00:00",
+    "client": {
+      "actual_status": "exited",
+      "cur_state": "stopped",
+      "duration": 389.4868505001068,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:10.841675+00:00",
+    "client": {
+      "actual_status": "missing",
+      "cur_state": "stopped",
+      "duration": 395.3123059272766,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:17.456006+00:00",
+    "client": {
+      "actual_status": "missing",
+      "cur_state": "stopped",
+      "duration": 401.84412455558777,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:23.165211+00:00",
+    "client": {
+      "actual_status": "missing",
+      "cur_state": "stopped",
+      "duration": 407.6052713394165,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:28.880309+00:00",
+    "client": {
+      "actual_status": "missing",
+      "cur_state": "stopped",
+      "duration": 413.33298921585083,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:34.639321+00:00",
+    "client": {
+      "actual_status": "missing",
+      "cur_state": "stopped",
+      "duration": 419.04310274124146,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": null,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:40.344104+00:00",
+    "client": {
+      "actual_status": "missing",
+      "cur_state": "stopped",
+      "duration": 424.7888741493225,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:46.028074+00:00",
+    "client": {
+      "actual_status": "exited",
+      "cur_state": "stopped",
+      "duration": 430.4631118774414,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:51.741911+00:00",
+    "client": {
+      "actual_status": "exited",
+      "cur_state": "stopped",
+      "duration": 436.25803446769714,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:10:57.602546+00:00",
+    "client": {
+      "actual_status": "exited",
+      "cur_state": "stopped",
+      "duration": 442.0297887325287,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:11:03.308572+00:00",
+    "client": {
+      "actual_status": "exited",
+      "cur_state": "stopped",
+      "duration": 447.80524802207947,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:11:09.022392+00:00",
+    "client": {
+      "actual_status": "exited",
+      "cur_state": "stopped",
+      "duration": 453.4653697013855,
+      "id": "[redacted-id]",
+      "intended_status": "stopped",
+      "next_state": "stopped",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  },
+  {
+    "at": "2026-09-02T05:11:14.885699+00:00",
+    "client": {
+      "actual_status": "exited",
+      "cur_state": "running",
+      "duration": 459.35840821266174,
+      "id": "[redacted-id]",
+      "intended_status": "running",
+      "next_state": "running",
+      "status_msg": "success, running vastai/test:self-test-cuda-13.0",
+      "uptime_mins": null
+    },
+    "owner_jobs": [
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      },
+      {
+        "actual_status": "loading",
+        "cur_state": "unloaded",
+        "dph_base": 0.6133333333333334,
+        "gpu_name": "A100 SXM4",
+        "id": "[redacted-id]",
+        "intended_status": "stopped",
+        "label": null,
+        "min_bid": 0.8,
+        "next_state": "unloaded",
+        "num_gpus": 1,
+        "status_msg": null
+      }
+    ]
+  }
+]

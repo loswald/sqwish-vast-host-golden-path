@@ -107,18 +107,19 @@ Vast warns that the IOMMU configuration needed for renter VMs can reduce NCCL pe
 
 ### Stage 1: one 4-GPU interruptible
 
-1. List with a fixed short end date, `discount_rate=0`, `vol_size=0`, an intentionally unattractive outside on-demand price, and `min_chunk=4`.
-2. Confirm the only outside contract is interruptible. Record verification and reliability immediately before reclaim.
-3. Configure `VAST_OWN_OFFER_ID` with this machine's 4-GPU on-demand offer. Preview `scripts/reclaim-gpu.sh`, then use its guarded apply flow.
-4. Verify that Vast pauses the renter, retains its disk, and starts the owner instance with all four GPUs. Do not stop services or touch the renter's container.
-5. Run a short owner workload, save its outputs, and release only the recorded owner instance with `scripts/release-gpu.sh`.
-6. Time the renter's automatic resume and record verification, reliability, GPU health, disk health, and daemon state immediately and again after Vast's delayed metrics update.
+1. While vacant, pre-create and stop the exact 4-GPU owner on-demand test instance, and stage the reviewed Host Job with `--args /bin/bash -lc '<OWNER_COMMAND>'` below the planned client bid.
+2. List with a fixed short end date, `discount_rate=0`, `vol_size=0`, an intentionally unattractive outside on-demand price, and `min_chunk=4`. Have the separately authenticated controlled client acquire the exact full-machine interruptible immediately, then unlist. Abort if any unknown client wins.
+3. Record verification and reliability, then run the Host Job reclaim first. The two-A100 trial found that Host Jobs stayed inert while unlisted, so any required relist must retain the fixed end and full-machine controls and be watched continuously for an unexpected contract.
+4. Verify that Vast pauses the controlled client, retains its disk, and gives the owner workload the intended GPU topology. Do not stop services or touch the renter container.
+5. Lower the Host Job, wait up to the acceptance limit, and measure return. The earlier client did not auto-resume within more than 79 seconds; if this repeats, record a failed automatic-return gate and use the exact controlled client's guarded Start action. That fallback is unavailable to a host controlling an unrelated public renter.
+6. Test the owner on-demand path separately by starting only the exact pre-created instance, then releasing only that instance with `scripts/release-gpu.sh`. Do not configure a fresh-create offer while occupied.
+7. Record verification, reliability, GPU health, disk health, and daemon state immediately and after delayed metric updates. Any material reliability decrease keeps production reclaim disabled.
 
 ### Stage 2: four 1-GPU interruptibles
 
 Relist with `min_chunk=1`. Vast documents that this permits 1-, 2-, and 4-GPU offers and gives each running instance exclusive GPUs; CPU and RAM baselines scale with the GPU fraction. Nominally, each 1-GPU renter receives about 8 physical cores and 128 GB RAM, but the published offer values are authoritative.
 
-Fill four controlled 1-GPU interruptible contracts, then repeat the same 4-GPU owner reclaim and release. Vast documents the priority pieces: on-demand outranks interruptible, paused data persists, and bids automatically resume when they regain priority. It does **not** explicitly document one 4-GPU owner request atomically preempting four separate 1-GPU contracts. Keep this behavior marked inferred until this test passes.
+Fill all four slices with separately authenticated controlled 1-GPU interruptible contracts, then repeat the Host Job and exact pre-created 4-GPU owner reclaim paths. Vast documents the priority pieces, but it does **not** explicitly document one 4-GPU owner request atomically preempting four separate 1-GPU contracts. Measure every client's return; if any needs its own Start action, the automatic-return gate fails even if controlled recovery succeeds. Keep atomic multi-contract reclaim and rating safety marked unproved until clean immediate and delayed checks pass.
 
 Stop the trial if any outside on-demand or reserved contract appears. A high on-demand price discourages such a contract but cannot prevent it.
 

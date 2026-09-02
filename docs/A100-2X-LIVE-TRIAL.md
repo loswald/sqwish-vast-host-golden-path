@@ -1,6 +1,6 @@
 # Two-A100 live hosting trial
 
-This note records the reusable parts of the 2× NVIDIA A100-SXM4-40GB qualification trial run on 2 September 2026. It intentionally excludes provider resource names, zones, addresses, account and project identifiers, machine and instance IDs, SSH paths, and all credentials.
+This note records the reusable parts of the 2× NVIDIA A100-SXM4-40GB qualification trial run on 2 September 2026. It intentionally excludes provider resource names, zones, addresses, account and project identifiers, machine and contract IDs, SSH paths, and all credentials.
 
 ## Status at a glance
 
@@ -10,11 +10,13 @@ This note records the reusable parts of the 2× NVIDIA A100-SXM4-40GB qualificat
 | Docker storage can be physically bounded away from the root filesystem | **Proved** | `/var/lib/docker` was mounted from a dedicated 250 GB XFS disk with project quotas enabled. |
 | The two GPUs and their interconnect pass Vast's workloads | **Proved diagnostically** | The relaxed self-test passed ResNet18, ECC, 2-GPU NCCL, and the simultaneous CPU/GPU burn. The run explicitly did not qualify the new host for verification. |
 | One-GPU and two-GPU owner jobs can be prepared in advance | **Proved while vacant** | Both on-demand standbys booted, saw the intended GPU count, and returned to a safe stopped state with their 20 GB disks retained. |
-| A genuine outside interruptible renter is paused by an owner start, resumes after owner stop, and causes no reliability penalty | **Pending** | No outside renter reclaim cycle had completed when this note was written. Do not infer this from the vacant-host tests or a same-account control. |
+| A separate-account interruptible can be reclaimed and returned without operator intervention or rating risk | **Failed the production gate** | Host Job reclaim paused the controlled client and ran owner work, but release did not auto-resume the client after more than 79 seconds. A client-side Start was required, and reliability fell after a malformed first owner launch. |
 
 ## Disposable on-demand host
 
 Use a separate test VM. Do not retrofit a running research worker for a marketplace experiment.
+
+This third-party cloud node was a disposable, operator-controlled qualification environment. It admitted only the operator's separate client account and a reviewed image; the public listing window was measured in seconds and no unknown renter appeared. Do not expose third-party cloud capacity to public tenants. Run any production hosting or unknown-tenant trial on the dedicated physical box, with the storage boundary and cleanup controls in this note.
 
 The successful trial shape was a provider-managed on-demand 2-GPU node with:
 
@@ -116,9 +118,9 @@ Repeating each create **without** `--cancel-unavail` succeeded immediately; both
 
 Do not turn this workaround into an automatic create retry while an outside renter is active. Reclaim should start one exact, pre-created standby and fail closed on any identity or state mismatch.
 
-## Final cheap-trial listing and price semantics
+## Earlier one-GPU cheap-trial listing and price semantics
 
-The host was sliced with `min_chunk=1`, reserved discounts disabled, volume offers disabled, and a fixed short end boundary. The final host-side settings were:
+During an earlier vacancy-only pricing check, the host was sliced with `min_chunk=1`, reserved discounts disabled, volume offers disabled, and a fixed short end boundary. The host-side settings were:
 
 | Component | Host setting | Renter-visible result |
 | --- | ---: | ---: |
@@ -149,45 +151,78 @@ Those renter-visible figures came from **one-GPU slice offers** because this lis
 
 The listing initially used a $0.26 host floor, about $0.3467 renter-facing. With the machine still vacant, it was reduced to $0.225 host-side and verified at exactly $0.3000 in renter search. These were quick-fill trial prices, not a production claim that bandwidth covers provider egress or that $0.225 is a durable market floor. Re-sample comparable A100 interruptible offers before each future listing and reprice only future acceptance; changing the minimum bid does not evict an existing contract.
 
-## Controlled follow-up evidence on the full two-GPU bundle
+## Final controlled two-account reclaim test
 
-A same-day follow-up prepared the controlled two-account reclaim path without admitting an unknown renter. The machine stayed unlisted except for the brief owner-standby creation window, when its on-demand price was set to a deterrent and its interruptible floor was above the sampled market. No outside contract appeared.
+The separate client account was funded with **$10** before the host was listed. It acquired the exact controlled two-GPU interruptible offer with a **$1.61 whole-machine hourly bid**, just above the offer's **$1.60 whole-machine `min_bid`**. The instance used the reviewed `vastai/test:self-test-cuda-13.0` image and a 10 GB disk.
 
-The current official self-test again completed successfully in relaxed mode: system checks, ResNet18, ECC, two-GPU NCCL, and the simultaneous 60-second CPU/GPU burn all passed. Vast destroyed the temporary test instance and unlisted the machine. Reliability remained **0.5999925**, verification remained **unverified**, and the machine reported no error or renter report. The self-test result callback returned `Invalid User`, so the local test evidence is authoritative for hardware health but does not prove a platform verification update.
+The public listing existed for **13.303551 seconds**. As soon as the exact controlled contract was confirmed, the host was unlisted. No unknown renter or contract appeared. The controlled workload reached 100% utilization on both A100s and used about **36,277 MiB on each GPU**.
 
-A new full-node owner on-demand instance then ran the official Vast test image with `gpu_burn 15` in a loop. Inside the container it saw both physical A100 UUIDs. Host telemetry measured both GPUs at 100% utilization, about 36.3 GB VRAM each, roughly 300 W each, and 55-58°C. The burn reported zero errors and about 17.7-19.1 TFLOP/s per GPU. The owner instance stopped to the required tuple `actual_status=exited`, `intended_status=stopped`, `cur_state=stopped`; both GPUs returned to 0% utilization and 0 MiB allocated.
+The final offer reported null `duration` and `end_date`, so this acquisition missed the runbook's required fixed-end listing guard. Immediate controlled acquisition and unlisting limited this run, but it is still a procedure deviation. A dedicated-hardware repeat must set and verify the fixed end before any listing becomes visible.
 
-That stopped owner record later disappeared before the controlled-client phase. The exact cause was not isolated: the host account had almost no client credit, the retained disk had a nonzero hourly charge, and a Host Job definition was added during the interval. Do not assume a free own-machine standby will persist. Fund the host account's client side, record the retained instance repeatedly, and prove it still exists immediately before admitting the controlled renter. If it disappears, abort rather than creating a replacement while occupied.
+The corrected market sample contained seven unique 2×A100-SXM4-40GB machines. Bid-offer `min_bid` values were renter-facing whole-machine totals: **$0.80 minimum, $1.066667 median, and $1.60 P95/P99/maximum per two-GPU machine-hour**. At the observed four-thirds renter surcharge, a $1.60 renter-facing P99 maps to a host listing floor of **$0.60 per GPU-hour**:
 
-The low-priority Host Job produced **two independent one-GPU bid records**, one for each physical GPU, rather than one atomic two-GPU job. With the machine unlisted and the job below the stored machine floor, both records remained inert at `actual_status=loading`, `intended_status=stopped`, `cur_state=unloaded`; no job container ran. This proves the current Host Job definition fans out per GPU on this host, but it does not yet prove selective preemption or automatic resume.
+```text
+host price_min_bid per GPU-hour = renter machine-total floor * 0.75 / GPU count
+                                    = $1.60 * 0.75 / 2
+                                    = $0.60
+```
 
-The fresh comparable sample contained seven unique 2×A100-SXM4-40GB machines. Bid-offer `min_bid` values were whole-machine totals: **$0.80 minimum, $1.066667 median, and $1.20 P95/P99/maximum per 2-GPU machine-hour**. At the observed four-thirds renter surcharge, the matching host listing input is **$0.45/GPU-hour**, and a controlled client's `--bid_price` must be just above **$1.20 for the machine**. An earlier sampler mislabeled `min_bid` as per-GPU and doubled it; that calculation was wrong and has been removed from the runbook.
+The client's `--bid_price` is also a whole-machine hourly total. Treating search-result `min_bid` as per-GPU and multiplying it by GPU count is wrong.
 
-The controlled outside-client cycle did not start because the separate client account remained unfunded. The machine was never opened at the final P99 floor, no unknown tenant was admitted, and no reclaim or rating-immunity conclusion follows from this attempt. Future runs must complete client authentication, payment, SSH key, reviewed image, and exact create command before the host listing window opens.
+### Measured Host Job behavior
 
-## Outside-renter reclaim test still required
+The Host Job definition fanned out into **two independent one-GPU jobs**, one for each physical GPU. It did not form one atomic two-GPU owner job. The observed phases were:
 
-The trial has proved vacant-host installation, multi-GPU qualification, storage isolation, price display, and reusable owner templates. It has **not** yet proved the user-critical behavior: a genuine outside interruptible tenant being paused and resumed by the owner without damaging host reliability.
+| Phase | Host Job setting | Renter-facing job price | Result |
+| --- | ---: | ---: | --- |
+| Below controlled client | $0.65/GPU-hour | $0.866667/hour for each 1-GPU job | Did not preempt the $1.61/hour two-GPU client contract. |
+| Above controlled client, malformed command | $1.30/GPU-hour | $1.733333/hour for each 1-GPU job | Once the machine was listed, both jobs displaced the client, but their containers failed because `-lc` was treated as the executable. |
+| Above controlled client, corrected command | $1.30/GPU-hour | $1.733333/hour for each 1-GPU job | Both one-GPU owner containers started and each completed `gpu_burn` successfully, using about 36 GB on its card. |
+| Release | $0.46/GPU-hour | Below the controlled client | Owner allocation released, but the controlled client did not auto-resume. |
 
-Complete the evidence in this order:
+In this observed scheduler path, each one-GPU Host Job had to outbid the **whole-machine** price of the two-GPU interruptible contract. Half of the renter's whole-machine bid was insufficient. Re-derive this behavior on every Vast scheduler version and GPU topology rather than assuming that one-GPU jobs compare against a per-GPU share.
 
-1. Wait for one or preferably two genuine outside bid contracts. Confirm in the host Contracts view that none is on-demand or reserved.
-2. Let the renter run for the chosen 30-60 minute observation window. Capture reliability, verification, daemon health, contract state, GPU assignment, disk use, and network counters.
-3. Start the exact pre-created 1-GPU owner standby. Measure whether one bid tenant becomes platform-paused while the other GPU continues serving.
-4. Stop that owner standby, poll its safe stopped-state tuple, and measure automatic renter resume time.
-5. With the 1-GPU owner safely stopped, start the exact 2-GPU standby. Measure whether both interruptible allocations pause cleanly.
-6. Stop the 2-GPU owner, measure both resumes, and recheck health.
-7. Record reliability and verification immediately, after the platform's delayed update, and again after a longer observation window.
+Host Jobs also required an **active machine listing** to schedule. Raising the job while the machine was unlisted did not reclaim the GPUs. After listing at **05:06:09.757Z**, the controlled client was stopped and both owner job records were running by **05:06:12.579Z**, about **2.82 seconds** later. Relisting reopens public acquisition risk, so reconcile the exact contract inventory immediately before and after every scheduler mutation.
 
-Use only Vast scheduler actions on the exact owner standbys. Do not kill tenant containers, restart Docker, stop the host daemon, reboot the VM, or unlist as a substitute for reclaim. Unlisting prevents new rentals; it does not prove or trigger clean preemption of an existing renter.
+The first owner launch used malformed image arguments: the argument list began with `-lc`, which Docker treated as an executable. Both owner container starts failed. A Host Job command using this test image must include the shell explicitly:
 
-A same-account bid/on-demand conflict is not accepted evidence. Prior control attempts produced a GPU-conflict response and never exercised priority over a genuine outside contract. Until the sequence above completes, the only accurate rating conclusion is **unknown**: neither “no penalty” nor “safe to evict” has been demonstrated.
+```bash
+vastai set defjob <MACHINE_ID> \
+  --price_gpu <HOST_JOB_PRICE_PER_GPU_HOUR> \
+  --image vastai/test:self-test-cuda-13.0 \
+  --args /bin/bash -lc '<REVIEWED_WORKLOAD>'
+```
+
+After correcting the arguments, the machine was relisted at **05:08:27.202Z**. Both owner containers started at **05:08:49Z**, saw one A100 each, and completed the bounded burn with zero reported burn errors.
+
+### Release and client return
+
+The Host Job was lowered to **$0.46/GPU-hour at 05:09:51.906Z**. The controlled client remained stored/stopped and did not auto-resume after more than **79 seconds**. A normal client-side Start was submitted at **05:11:11.511Z**. Its scheduler state reached `cur_state=running` at **05:11:14.886Z**, about **3.37 seconds** later; `actual_status=running` and 100% utilization on both GPUs were confirmed by **05:12:21Z**.
+
+Automatic return therefore failed in this tested Host Job path. A controller for a separately controlled client must include an exact-instance client-side Start fallback and verify application health, not merely scheduler state. That fallback is unavailable to the host for an unrelated renter, so unattended public hosting does not meet the research team's seamless hand-back requirement on this evidence.
+
+### Reliability result and production gate
+
+Reliability fell from **0.5999925** to **0.5727243**, an absolute drop of **0.0272682** and about **4.54% relative**, after the malformed first owner launch. No renter report appeared. Reliability remained at 0.5727243 through the corrected reclaim and release cycle.
+
+The measurement does not isolate whether the drop came from the failed owner containers, preemption itself, or a delayed platform update. It does prove that this end-to-end sequence cannot be called rating-safe. Do not claim that interruptible status grants penalty-free host eviction. A dedicated-box production rollout remains blocked until a clean, correctly configured cycle preserves reliability through immediate and delayed checks and Vast confirms the intended scheduler behavior.
+
+### Cost and teardown
+
+Direct Vast client spend was **$0.10394347623**, leaving **$9.89605652377** of API credit. This excludes the cloud provider cost of the temporary host.
+
+The controlled contract was destroyed; temporary client API and SSH keys were revoked; the host was unlisted; the default Host Job was removed; and the Vast machine record was deleted. The exact disposable cloud VM, attached disks, static address, and trial firewall rule were also deleted. No production or unrelated cloud machine was part of the teardown.
 
 ## Keep for the dedicated-box golden path
 
+- Run marketplace hosting and unknown-tenant tests only on the dedicated physical box. Use disposable third-party cloud capacity only with the provider's prior written approval, for operator-controlled qualification with a reviewed workload and a seconds-long acquisition window.
 - Give Docker a dedicated, quota-enabled XFS disk and set the physical size before installation.
-- Reserve owner template disks while vacant; keep one exact 1-GPU and one exact full-node standby.
+- Reserve owner template disks while vacant, fund their retained storage, and prove each exact stopped record still exists immediately before listing.
 - Validate JSON bodies and postconditions because the CLI can exit 0 for API errors.
 - Treat relaxed self-test success as hardware evidence, not verification.
-- Compare host-entered and renter-visible prices after every listing change.
-- Prove reclaim with an outside interruptible renter and delayed reliability checks before enabling unattended owner preemption.
+- Compare host-entered per-GPU prices with renter-visible whole-machine prices after every listing change.
+- Pass Host Job image arguments as `/bin/bash -lc '<workload>'`; run the reviewed job while vacant before relying on it for reclaim.
+- Keep the machine actively listed when testing Host Job scheduling, and treat every relist as a fresh public acquisition window.
+- On the observed two-GPU shape, price each one-GPU Host Job above the renter's whole-machine bid if reclaim is intended. Re-measure this comparison on the four-GPU box.
+- Require a client-side Start fallback and application-level health check after owner release. Do not assume a public renter will resume automatically.
+- Keep production owner preemption disabled while the rating gate fails. Repeat a clean cycle and collect delayed reliability observations before enabling it.

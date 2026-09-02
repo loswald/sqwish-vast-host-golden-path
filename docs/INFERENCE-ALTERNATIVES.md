@@ -200,7 +200,7 @@ Research teams do not universally subsidise compute this way because unpredictab
 
 ## Recommendation
 
-1. **Keep the current Vast interruptible path as the primary experiment.** It has a concrete owner-reclaim mechanism in this repository, although it still needs the outside-renter trial and does not guarantee zero rating impact.
+1. **Keep Vast interruptible hosting as a gated dedicated-box experiment.** The controlled outside-client trial proved rapid Host Job reclaim, but automatic renter return failed and the confounded reliability decrease provided no rating-safety evidence. Repeat a clean cycle on dedicated hardware before treating it as production spillover income.
 2. **Run any inference alternative on one physical GPU first.** Keep the other three unlisted and immediately available to research. Do not use MIG in the first market test because marketplace recognition of the slices is unproven.
 3. **Use engy SN53 only as a high-risk API pilot.** First prove exact-card support, the pinned model, proof validity, concurrency, and p99 service gates. Measure emissions over at least one complete scoring epoch; do not value paid token volume as direct cash revenue.
 4. **Use Salad only as a low-cost compatibility probe.** Confirm that the client recognises the card, assigns container work, uses the intended GPUs, and provides a redeemable net payout before forecasting.

@@ -23,7 +23,9 @@ It does not prove a universal reliability exemption, a scheduler SLA, safety for
 
 Vast documents two supported ways to test an operator's own machine: a separate client account for the full client experience, and a free own-machine instance from the host account. It also documents that on-demand instances outrank interruptibles, lower interruptible bids pause, and paused interruptibles resume automatically when priority returns.
 
-Vast's Verification Stages guide says ongoing owner workloads must use Host **Jobs**. The current CLI implements this as `vastai set defjob`: a low-priority background bid on the host machine. A Host Job may win against a lower client bid, but cannot displace on-demand or reserved work. The Host Job API exposes no explicit GPU-count parameter, so its atomic two-GPU behavior is a measured result rather than an assumption.
+Vast's Verification Stages guide says ongoing owner workloads must use Host **Jobs**. The current CLI implements this as `vastai set defjob`: a low-priority background bid on the host machine. A Host Job may win against a lower client bid, but cannot displace on-demand or reserved work. The Host Job API exposes no explicit GPU-count parameter, so its atomic two-GPU behavior is a measured result rather than an assumption. Pass a shell workload as `--args /bin/bash -lc '<OWNER_COMMAND>'`; `--args` consumes the rest of the command and must remain last.
+
+The live two-A100 test added three scheduler constraints that the public documentation did not establish. The Host Jobs remained inert while the machine was unlisted and scheduled only after it was relisted. Relisting produced two one-GPU Host Job records. At a host input of `$1.30/GPU-hour`, each record appeared with renter-side `dph_base=$1.733333` and together they preempted the controlled two-GPU contract bid at `$1.61/machine-hour`; at `$0.65/GPU-hour`, each appeared at `dph_base=$0.866667` and did not preempt it. These are observations from one scheduler run, not a guaranteed comparison formula. Lowering the Host Jobs did not automatically resume the client within more than 79 seconds; the controlled client required an explicit **Start**. Design release as an observed state transition with a guarded Start fallback, not as seamless automatic resume.
 
 A host-account, own-machine on-demand instance is documented for testing and gives deterministic priority over interruptibles. Until Vast confirms that ongoing team work may use that route, treat it as a reclaim experiment rather than the production policy.
 
@@ -65,7 +67,7 @@ Do not mix the two price units. In a `search offers --type bid` response, `min_b
 host price_min_bid per GPU-hour = renter machine-total P99 * 0.75 / offered GPU count
 ```
 
-Derive and verify the live conversion from the exact relisted offer instead of assuming 0.75 forever. For example, a $1.20 2-GPU renter-total P99 maps to a $0.45/GPU-hour host floor; the controlled client's machine-total bid must exceed $1.20. Multiplying the raw `min_bid` by the GPU count double-counts the GPUs and can make the controlled bid fail to clear its own listing.
+Derive and verify the live conversion from the exact relisted offer instead of assuming 0.75 forever. In the recorded acquisition snapshot, the 2-GPU renter-total P99 was **$1.60/machine-hour**, which mapped to a **$0.60/GPU-hour** host floor; the controlled client bid **$1.61/machine-hour**. Multiplying the raw `min_bid` by the GPU count double-counts the GPUs and can make the controlled bid fail to clear its own listing.
 
 Representative listing shape:
 
@@ -82,7 +84,7 @@ vastai list machine "$MACHINE_ID" \
   --vol_size 0
 ```
 
-The controlled client must query the exact machine ID, exact two-GPU bid offer, verify that its renter-facing `min_bid` equals the sampled machine-total floor, and create immediately with `--cancel-unavail`, a unique label, a 10 GB disk, and a machine-total bid above that value.
+The controlled client must query the exact machine ID, exact two-GPU bid offer, verify that its renter-facing `min_bid` equals the sampled machine-total floor, and create immediately with `--cancel-unavail`, a unique label, a 10 GB disk, and a machine-total bid above that value. For the recorded snapshot, this meant `--bid_price 1.61` against `min_bid=1.60`.
 
 As soon as the exact controlled instance is proven running on the intended machine with both GPUs, unlist the machine. Official Vast documentation says unlisting prevents new contracts while existing contracts continue under their original terms.
 
@@ -94,7 +96,7 @@ Abort if acquisition does not complete promptly, lands on another machine, expos
 |---|---|
 | 00:00-00:03 | List with `min_chunk=2`; controlled client acquires the exact 2-GPU interruptible; verify client, machine, offer, bid, GPU count, image, label, and disk; unlist and prove no offer remains. |
 | 00:03-00:08 | Warm the controlled workload. Prove two GPU UUIDs, bounded CUDA load, heartbeat, fsynced checkpoint, and a clean NCCL/all-reduce result. |
-| 00:08-00:18 | **Host Job reclaim 1.** Raise the staged Host Job above the client bid. Measure client pause and Host Job start; inspect how many GPUs the Host Job sees. Run five minutes, lower it below the client bid, and measure client auto-resume and checkpoint recovery. |
+| 00:08-00:18 | **Host Job reclaim 1.** Relist under the same full-GPU, high-floor controls only long enough for the staged Host Jobs to schedule, watching continuously for an unexpected contract, because the live test found they remained inert while unlisted. Raise the Host Job above the client bid. Measure client pause and Host Job start; inspect how many GPUs the Host Job sees. Run five minutes, lower it below the client bid, and measure client resume and checkpoint recovery. If it does not resume within the acceptance limit, preserve evidence and use the controlled client's guarded **Start** action once. |
 | 00:18-00:28 | **Host Job reclaim 2.** Repeat once. Stop if Host Job GPU allocation is ambiguous, either side overlaps on a GPU, or any state transition is uncertain. |
 | 00:28-00:38 | **Atomic 2-GPU on-demand reclaim 1.** Start the exact stopped owner test instance. Measure controlled-client pause and owner running. Run the known two-GPU owner job for five minutes; stop the exact owner instance and measure client resume. |
 | 00:38-00:48 | **Atomic 2-GPU on-demand reclaim 2.** Repeat once using only the exact recorded instance. Do not create a replacement while occupied. |
@@ -127,7 +129,7 @@ Every executed cycle must satisfy:
 - only the exact controlled contracts appear;
 - expected owner work reaches running within 30 seconds;
 - no owner/client overlap occurs on a GPU;
-- the controlled client automatically runs again within 60 seconds of owner release;
+- the controlled client automatically runs again within 60 seconds of owner release; if it does not, the cycle fails this threshold even if a guarded client **Start** later recovers it;
 - its disk checkpoint is intact with no more than five seconds of uncheckpointed work;
 - an unaffected one-GPU sibling has no health gap over five seconds;
 - no daemon disconnect, host outage, Xid, uncorrectable ECC, OOM, storage exhaustion, persistent throttle, network error, report, red machine error, immediate reliability decrease, or verification change occurs.
@@ -162,7 +164,7 @@ Capture the same raw reliability, expected reliability, verification, reports, a
 - 24 hours later;
 - seven days later.
 
-The result may say “no observed change through seven days.” It must never claim a universal no-penalty guarantee unless Vast provides that guarantee in writing.
+The result may say “no observed change through seven days.” It must never claim a universal no-penalty guarantee unless Vast provides that guarantee in writing. In this live trial, reliability decreased during a cycle that also included a failed container launch and reclaim activity. Those events are confounded, so the test cannot attribute the decrease to one cause and provides no evidence that reclaim is rating-safe.
 
 ## Four-GPU adaptation
 
@@ -186,16 +188,16 @@ Fill this table with sanitized evidence only:
 | Test date/time and Vast CLI version | 2 September 2026; CLI 1.5.6 |
 | Hardware/topology | 2× A100-SXM4-40GB; 300 GB/s advertised NVLink; two-GPU NCCL passed |
 | Baseline reliability / expected reliability / verification | 0.5999925 / unavailable / unverified; no reports or machine error |
-| P99 sample size and computed floor | Seven unique 2-GPU machines; $1.20 renter machine-total P99; $0.45 host/GPU-hour at the observed conversion |
-| Public acquisition window | Final P99 window not opened because the controlled client funding gate failed |
-| Exact controlled contracts only | No outside contract was admitted; full controlled-client proof remains pending |
-| Host Job visible GPU count | Definition produced two inert one-GPU bid records; running visibility remains pending |
-| Host Job reclaim/resume timings | Pending |
+| P99 sample size and computed floor | Seven unique 2-GPU machines; $1.60 renter machine-total P99; $0.60 host/GPU-hour at the observed conversion; controlled bid $1.61/machine-hour |
+| Public acquisition window | 13.303551 seconds before immediate unlisting. The final offer reported null `duration` and `end_date`, so the required fixed end epoch was missed. This was a procedure deviation; do not repeat it on dedicated hardware. Host Jobs later required relisting before they scheduled. |
+| Exact controlled contracts only | The observed acquisition and reclaim records contained the operator-controlled client and owner jobs |
+| Host Job visible GPU count | Relisting produced two one-GPU Host Job records |
+| Host Job reclaim/resume timings | Host $1.30/GPU-hour (`dph_base=1.733333` per one-GPU job) preempted the $1.61 two-GPU client; host $0.65/GPU-hour (`dph_base=0.866667` each) did not. Client did not auto-resume within >79 seconds after lowering and required client Start. |
 | 2-GPU on-demand reclaim/resume timings | Vacant-host owner job proved both GPUs and clean stop; tenant preemption/resume pending |
 | Selective one-GPU result | Pending |
 | Full reclaim over slices result | Pending |
-| Checkpoint/data integrity | Owner heartbeat/burn disk survived its run and clean stop; controlled-client continuity pending |
+| Checkpoint/data integrity | The same stored client contract returned and both GPUs later reached 100% utilization; a fsynced application-checkpoint integrity proof was not collected. |
 | Host overhead and health | Both GPUs reached 100%, ~36.3 GB VRAM and ~300 W each, 55-58°C, zero burn errors; returned idle cleanly |
-| End-of-test reliability / verification / reports | 0.5999925 / unverified / no observed report or machine error before final cleanup |
+| End-of-test reliability / verification / reports | Reliability decreased during a confounded failed-container/reclaim cycle; verification/report observations cannot isolate the cause, so no rating-safety claim is supported |
 | +2h / +24h / +7d observation | Pending |
-| Final conclusion and open questions | Hardware, storage boundary, owner full-node job, P99 units, and Host Job fan-out proved. Outside pause/resume and rating impact remain unproved. |
+| Final conclusion and open questions | Price units, controlled acquisition, Host Job fan-out, and Host Job preemption were observed. Host Jobs required relisting; automatic client resume failed the 60-second target and needed Start; the confounded reliability decrease prevents any rating-safety claim. Repeat on dedicated hardware after fixing the owner Host Job arguments, fixed-end listing guard, and guarded release path. |

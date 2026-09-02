@@ -5,6 +5,12 @@
 on-demand price, reserved pricing, offer end date, or any renter's bid, and it
 does not stop, destroy, pause, or evict a contract.
 
+The helper deliberately prices host **per-GPU** floors from renter-facing
+**one-GPU** offers. It can guard a multi-GPU machine only when that machine is
+currently exposing comparable one-GPU slices; it is not a full-machine P99
+acquisition calculator. Never feed a multi-GPU offer's machine-total `min_bid`
+directly into this helper or multiply it by GPU count.
+
 Changing a minimum bid is not a timed reclaim mechanism. Existing contracts
 remain contracts and must be honored. Use the separately guarded owner-reclaim
 trial only after manually establishing that an outside contract is genuinely

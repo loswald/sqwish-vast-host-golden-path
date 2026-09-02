@@ -207,7 +207,7 @@ This template pool is an intended design, not yet a proved Vast guarantee. The p
 - Storage and bandwidth are usage-dependent and small relative to GPU compute in this model. Comparable offers showed roughly $0.20/GB/month storage and a few dollars per TB transfer. Count them only after real invoices show both renter usage and host earnings.
 - SCAN's page says the system includes NVMe storage and uncontended network ports with no hidden fees, but the written long-term quote must confirm power, traffic, public IPv4, port forwarding, and any excess-use charges.
 - Payout conversion fees, foreign-exchange movement, downtime, failed instance starts, and operational time are zero in the table.
-- The model assumes the reclaim workflow works and that a pre-created stopped owner instance preserves enough disk to start. Until the outside-renter pause/resume test passes, revenue and seamless owner access should be treated as separate hypotheses.
+- The model assumes the reclaim workflow works and that a pre-created stopped owner instance preserves enough disk to start. The controlled two-A100 Host Job test proved rapid reclaim but failed automatic return: the client needed its own Start action after more than 79 seconds, and the confounded reliability decrease failed the rating-safety gate. Revenue and seamless owner access therefore remain separate hypotheses.
 
 ## Formula and calculator
 
