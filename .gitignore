@@ -12,6 +12,10 @@ snapshots/
 vast_host_install.log
 vast_host_uninstall.log
 
+# Python bytecode and local test caches.
+__pycache__/
+*.py[cod]
+
 # Never commit CLI credentials or copied installer commands.
 vast_api_key
 install

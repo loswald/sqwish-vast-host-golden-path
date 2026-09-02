@@ -12,14 +12,20 @@ Begin with `min_chunk=4`, which produces one full-machine renter contract and th
 
 | Resource | Published value | Vast fit |
 | --- | ---: | --- |
-| GPUs | 4x NVIDIA RTX PRO 6000, 96 GB each | Identical premium GPUs; the exact Server, Workstation, or Max-Q variant is not stated |
+| GPUs | 4x NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 96 GB each | Vast model `RTX PRO 6000 WS`; confirm four 600 W cards at provisioning |
 | CPU | AMD EPYC 9354P, 32 cores / 64 threads | 8 physical cores per GPU, above Vast's 2-per-GPU minimum |
 | RAM | 512 GB DDR5 ECC | Above `0.95 x 4 x 96 GB = 364.8 GB` |
 | Storage | One 2 TB PCIe NVMe system drive | Enough raw capacity for a pilot; the separate Docker-storage layout is not published |
 | OS | Ubuntu 24.04 LTS available | Vast recommends Ubuntu Server 22.04 or 24.04 |
 | Network | “Uncontended network ports” | Link speed, symmetry, public IPv4, and inbound port range are not published |
 
-Source: [SCAN product page](https://www.scan.co.uk/products/3xs-sc-pb4-32t-1-week-4x-96gb-nvidia-rtx-pro-6000-512gb-ddr5-ecc-amd-epyc-9354p).
+Sources: [SCAN product page](https://www.scan.co.uk/products/3xs-sc-pb4-32t-1-week-4x-96gb-nvidia-rtx-pro-6000-512gb-ddr5-ecc-amd-epyc-9354p), its [RTX PRO 6000 Cloud Workstations category](https://www.scan.co.uk/shop/computer-hardware/cloud-solutions-ai-vgpu/3xs-cloud-workstations-rtx-pro-6000), and the [SCAN full Workstation Edition card](https://www.scan.co.uk/products/96gb-pny-nvidia-rtx-pro-6000-blackwell-24064-cuda-752-tensor-188-rt-gddr7-w-ecc-pcie-50x16-4x-dp-21).
+
+### Variant identification
+
+The subscription title itself omits the suffix, but SCAN's exact category says these systems use the flagship *workstation* RTX PRO 6000 Blackwell card. SCAN's published 4,000 AI TOPS and 125 FP32 TFLOPS match NVIDIA's full Workstation Edition; Max-Q is 3,511 TOPS/110 TFLOPS and Server Edition is 120 TFLOPS. SCAN also sells the full 600 W, double-flow-through PNY `VCNRTXPRO6000-PB` as “cloud ready” while separately and explicitly naming its Max-Q and Server cards.
+
+Model the service as Vast `RTX PRO 6000 WS`. The remaining uncertainty is contractual configuration, because the individual subscription page does not print the board part number or power cap. Make acceptance conditional on a build sheet naming `VCNRTXPRO6000-PB` or `VCNRTXPRO6000-SB` and a sanitized `nvidia-smi` query showing four identical GPUs with a 600 W maximum/default power limit. Do not accept `VCNRTXPRO6000MQ-*` as equivalent.
 
 ## Confirm before provisioning
 
@@ -27,10 +33,10 @@ Treat any missing item as a stop condition until it is demonstrated on the actua
 
 - The operating system is a dedicated physical host rather than a vGPU guest, and `nvidia-smi` sees four complete, identical 96 GB devices. Vast defines a machine as a single physical host.
 - Full root or passwordless sudo is available, including permission to install Docker, NVIDIA Container Toolkit, the Vast manager, kernel updates, and system services.
-- The exact GPU variant is identified. NVIDIA's variants differ sharply: Server is 400-600 W and passive, Workstation is 600 W, and Max-Q is 300 W. Vast uses distinct Server and Workstation model names.
+- The board part number and runtime identity confirm the full Workstation Edition. NVIDIA's variants differ sharply: Server is 400-600 W and passive, Workstation is 600 W, and Max-Q is 300 W. Vast prices all three under distinct model names.
 - A stable public IPv4 address reaches the host directly. At least 20 forwarded TCP **and** UDP ports are available for four GPUs; Vast recommends 400. No CGNAT sits in the path.
 - Symmetric throughput is at least 500 Mbps. For four premium 96 GB GPUs, record the actual sustained rate and contention rather than treating Vast's floor as a performance target.
-- `/var/lib/docker` can use a dedicated SSD/NVMe filesystem of at least 200 GB, preferably XFS with project quotas. The published single 2 TB system drive does not establish this layout; request another SSD or a demonstrated separate Docker device.
+- `/var/lib/docker` can use a dedicated SSD/NVMe filesystem of at least 200 GB total, preferably XFS with project quotas. Vast's current rule is 200 GB of dedicated Docker storage for the machine plus 20 GB free on the root filesystem; it is no longer 128 GB per GPU. For minimum exposure on this 2 TB system, create a hard **300-400 GB** Docker partition and keep the rest outside Vast. Disable volume offers. The published single drive does not establish the required layout.
 - The motherboard, slot wiring, and PCIe switches are disclosed or measurable. The EPYC 9354P supports 128 PCIe 5.0 lanes, but that does not prove each installed slot is wired at x16 or free of a shared bottleneck.
 - Boot, Secure Boot, IOMMU, and driver configuration are controllable. Keep Vast VM mode off for this Docker pilot.
 
@@ -47,7 +53,7 @@ free -h
 lsblk -o NAME,MODEL,SERIAL,SIZE,FSTYPE,MOUNTPOINTS
 findmnt -R /
 nvidia-smi -L
-nvidia-smi --query-gpu=index,name,uuid,memory.total,driver_version,power.limit --format=csv
+nvidia-smi --query-gpu=index,name,uuid,memory.total,driver_version,power.default_limit,power.max_limit,power.limit --format=csv
 nvidia-smi topo -m
 lspci -tv
 sudo lspci -vv -d 10de:

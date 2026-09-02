@@ -1,6 +1,6 @@
 # Vast.ai owned-host golden-path runbook
 
-> **Scope:** A dedicated, physically owned GPU server that may be offered cheaply to interruptible bidders while the owner is idle, then reclaimed through Vast's scheduler for the owner's own on-demand instance. This is an operations runbook, not a promise of earnings or a promise that preemption has zero rating impact.
+> **Scope:** A dedicated physical GPU server under full operator control that may be offered cheaply to interruptible bidders while the owner is idle, then reclaimed through Vast's scheduler for the owner's own on-demand instance. This is an operations runbook, not a promise of earnings or a promise that preemption has zero rating impact.
 >
 > **Source convention:** **Verified** means an official Vast document, the current Host Setup page, or the current official installer/uninstaller was checked. **Inferred** means the workflow combines separately documented features and still needs one controlled end-to-end trial.
 
@@ -11,7 +11,7 @@ Do not list the machine until everyone responsible for it accepts these facts:
 1. **Verified limitation:** Vast has no documented `interruptible-only` host switch. `vastai list machine` exposes both an on-demand GPU price and an optional interruptible minimum bid. A very high on-demand price can make outside on-demand rental unattractive, but cannot make it impossible.
 2. **Verified contract rule:** A client rental locks the price, hardware specifications, and offer end date. Repricing, shortening the offer, or unlisting affects future rentals only. It does not end an existing contract.
 3. **Verified priority rule:** On-demand and reserved instances have priority over interruptible instances. An interruptible instance may be paused when on-demand is requested; its data remains, and it resumes when it regains priority.
-4. **Inferred reclaim workflow:** A free, owner-created on-demand instance on the same machine should pause an outside interruptible instance. Destroying only the owner's instance should return priority, after which the bidder should resume automatically if it is still the winning bid. Vast documents each component, but does not explicitly publish a host-specific "reclaim with no rating effect" guarantee. Validate this once under controlled conditions before relying on it.
+4. **Inferred reclaim workflow:** Starting a pre-created owner on-demand instance on the same machine should pause an outside interruptible instance. Stopping that owner instance should return priority; fresh create/destroy is the fallback. The bidder should resume automatically if it is still the winning bid. Vast documents each component, but does not explicitly publish a host-specific "reclaim with no rating effect" guarantee. Validate this once under controlled conditions before relying on it.
 5. **Verified maintenance rule:** Unlisting, taking the host offline, restarting Docker, killing a renter container, or using maintenance notice is not the reclaim mechanism. Vast says all rental contracts must be honored and machines should remain online.
 
 If strictly preventing all outside on-demand or reserved rentals is a hard requirement, stop here. The current documented host controls cannot guarantee it.
@@ -26,7 +26,7 @@ Recommended role split:
 |---|---|---|
 | Team owner | Agreement, team membership, payout configuration, emergency recovery | Owner role; keep daily API keys out of this account |
 | Host administrator | Install, list/unlist, pricing, maintenance, cleanup | `machine_read`, `machine_write`; add `team_read` only if operationally useful |
-| Reclaim operator | Observe host, find own offer, create and destroy only the owner's reclaim instance | `machine_read`, `misc`, `instance_read`, `instance_write` |
+| Reclaim operator | Observe host, start/stop the exact reusable owner instance, or create/destroy only a recorded fresh owner instance | `machine_read`, `misc`, `instance_read`, `instance_write` |
 | Observer | Health and earnings review without mutations | `machine_read`; optionally `instance_read` and `billing_read` |
 
 Keep `billing_write`, `team_write`, and `user_write` away from routine operator keys. Team owners/managers can create custom roles in the Team dashboard. Use one API key per operator or automation, name it for its purpose, grant the smallest permission set, and revoke it when unused.
@@ -354,19 +354,21 @@ This changes future bid acceptance. Do not use it to evict an existing renter.
 
 ### What platform preemption means
 
-The supported behavior is:
+The preferred workflow keeps one reusable owner instance stopped between experiments:
 
 ```text
 outside interruptible running
         │
-        │ owner creates on-demand on same offer/machine
+        │ owner starts exact pre-created on-demand instance
         ▼
 outside interruptible paused; its disk retained
         │
-        │ owner destroys only owner on-demand instance
+        │ owner stops exact owner instance; both disks retained
         ▼
 outside interruptible resumes automatically if it again has priority
 ```
+
+A stopped instance preserves the owner's disk and continues to incur storage charges. It does not reserve a GPU. Restart still asks the scheduler for the GPU, so this design prevents a full tenant disk from blocking owner disk allocation but does not guarantee GPU availability or host-versus-tenant preemption. Fresh create/destroy remains a secondary path when no reusable ID is configured.
 
 This differs from:
 
@@ -381,17 +383,66 @@ Before reclaiming:
 
 1. Capture the current reliability score, verification state, daemon status, errors, metrics, and all contracts.
 2. Confirm the intended machine ID from `vastai show machines`.
-3. Search the machine's offers and select its on-demand offer ID.
+3. Confirm the configured reusable instance ID, or search the machine's offers and select its on-demand offer ID for a fresh create.
 4. Confirm no outside on-demand or reserved contract exists. If one exists, **abort**. It has high priority and its contract must be honored.
 5. Confirm any outside contract you expect to pause is explicitly interruptible/bid.
-6. Confirm the owner workload will fit the currently offered GPU grouping and disk.
-7. Record the owner-instance label. Before create, write a private pending marker; after a confirmed response, atomically write the returned owner contract ID to the active state file.
+6. For a reusable instance, match its exact ID, machine ID, dedicated owner label, `is_bid=false`, GPU count and original offer where available. Require the fail-closed stopped-state proof: `actual_status` is one of `created`, `exited`, or `stopped`, while `intended_status=stopped` and `cur_state=stopped`. Reject missing fields and every other actual state.
+7. Confirm the owner workload fits the reviewed GPU grouping and its fixed disk allocation.
+8. Review the instance end date and replace an expiring reusable standby while the host is safely vacant.
 
-The helper uses `pending-reclaim.json` and an atomic `reclaim.lock/` under `VAST_STATE_DIR` to prevent a second owner create when a process crashes or a network response is uncertain. If either remains, check whether a helper process is still running, then inspect Vast Instances for the recorded label. Destroy a found owner instance through the guarded release override. Clear a stale marker only after the label is absent and no create can still be in flight.
+The helpers use mode-tagged state and an atomic `reclaim.lock/` under `VAST_STATE_DIR`. Precreated mode writes active `start-pending` state before starting. Fresh mode writes `pending-reclaim.json` before creating. If state or the lock remains, check whether a helper is running and inspect the recorded exact instance and label. Use guarded release to stop a precreated attempt. Clear state manually only after independently proving the intended postcondition.
 
 The official CLI only shows the current account's instances. A host operator must also inspect the host's Machines/Contracts view; do not assume `vastai show instances` reveals outside clients.
 
-### Create the owner on-demand instance
+A same-account interruptible instance is not a valid substitute for the outside renter in this test. In the controlled September 2026 trial, Vast rejected an owner on-demand create on the same offer while that account's interruptible instance occupied the GPU with HTTP 400, error 3763 (`GPU conflict`). This established only that self-rentals conflict; it did not exercise host priority over a genuine outside interruptible contract. Wait for a real outside interruptible rental before declaring reclaim validated.
+
+### Prepare the reusable owner standby while vacant
+
+Do this once before accepting outside rentals, or when intentionally replacing the standby. The host must be vacant and the exact on-demand offer reviewed:
+
+```bash
+vastai create instance <OWN_ON_DEMAND_OFFER_ID> \
+  --image <OWNER_WORKLOAD_IMAGE> \
+  --disk <OWNER_DISK_GB> \
+  --ssh --direct \
+  --label owned-reclaim-standby \
+  --cancel-unavail --raw
+
+vastai show instance <OWN_INSTANCE_ID> --raw
+vastai stop instance <OWN_INSTANCE_ID> --raw
+vastai show instance <OWN_INSTANCE_ID> --raw
+```
+
+Do not pass `--bid_price`. Persist required owner data, then stop the exact instance. Do not trust the start/stop command's text or exit code as proof: Vast CLI 1.5.6 prints human output under `--raw` and can exit zero for unsuccessful responses. A live safely stopped instance that never fully started reported `actual_status=created`, `intended_status=stopped`, and `cur_state=stopped`; a normally stopped instance may report `actual_status=exited`. Poll `show instance` until the exact record satisfies the explicit stopped-state proof above. Also record the exact ID, machine ID, label, `is_bid=false`, GPU count, offer ID when present, disk size, image, end date, and all three raw state fields in private operations records.
+
+Set these values in the private `.env`:
+
+```bash
+VAST_MACHINE_ID=<MACHINE_ID>
+VAST_OWN_OFFER_ID=<OWN_ON_DEMAND_OFFER_ID>
+VAST_OWN_INSTANCE_ID=<OWN_INSTANCE_ID>
+VAST_OWN_LABEL_PREFIX=owned-reclaim
+VAST_GPU_COUNT=<EXPECTED_GPU_COUNT>
+```
+
+The ID selects precreated mode. Any validation failure aborts. The helper contains no fallback from this mode to a fresh create.
+
+### Start the reusable owner instance
+
+Preview, review Host Machines/Contracts, then apply:
+
+```bash
+./scripts/reclaim-gpu.sh
+./scripts/reclaim-gpu.sh --contracts-reviewed --apply
+```
+
+Apply asks for `START <INSTANCE_ID> ON <MACHINE_ID>`, repeats the exact stopped-instance proof under its lock, persists `mode: precreated` and `status: start-pending`, then starts only that ID. It polls for up to 30 seconds. Success requires the same exact record to report all three status fields as `running`. An uncertain or stuck start retains active state; run the guarded release to stop/cancel that exact attempt. Never create a replacement while a tenant is active.
+
+Vast documents that scheduling beyond roughly 30 seconds usually means the GPU is unavailable. A stopped standby protects disk allocation but has no GPU reservation. Addresses and ports can change after restart, so obtain fresh connection details after running is confirmed.
+
+### Fresh create fallback
+
+Leave `VAST_OWN_INSTANCE_ID` blank only when deliberately accepting a fresh disk allocation at reclaim time. The helper then previews this flow:
 
 ```bash
 vastai search offers 'machine_id=<MACHINE_ID> verified=any' --type on-demand --raw
@@ -404,26 +455,41 @@ vastai create instance <OWN_ON_DEMAND_OFFER_ID> \
   --cancel-unavail
 ```
 
-Again, do not pass `--bid_price`. Parse the returned `new_contract` value and store it as `OWN_INSTANCE_ID`. Wait until:
+Again, do not pass `--bid_price`. The helper writes a pending marker before create, parses the returned ID, persists `mode: fresh-created`, and retains uncertain state rather than repeating the call. Wait until:
 
 - the owner instance is `running`;
 - the intended outside bid instance is shown as paused by Vast;
 - daemon heartbeat, thermals, power, disk, and network remain healthy.
 
-If the outside bid does not transition cleanly, the owner instance does not start, the daemon becomes unknown/offline, or a red error appears, stop the owner attempt by destroying only `OWN_INSTANCE_ID`. Do not touch the outside container.
+If the outside bid does not transition cleanly, the owner instance does not start, the daemon becomes unknown/offline, or a red error appears, release only the recorded owner instance. Do not touch the outside container.
 
 ### Release to the bidder
 
+Preview and apply through the mode-aware helper:
+
 ```bash
-vastai show instance <OWN_INSTANCE_ID> --raw
-vastai destroy instance <OWN_INSTANCE_ID> -y --raw
+./scripts/release-gpu.sh
+./scripts/release-gpu.sh --apply
 ```
 
-Before running destroy, match all three: instance ID, machine ID, and owner label. Destroy is irreversible. The `-y` above is appropriate only after that independent check; `release-gpu.sh` performs a stronger typed confirmation first. Never select an ID from host-side Docker output. Treat the operation as complete only when the raw response contains `"success": true`.
+For `precreated`, release matches the exact ID, machine, label, on-demand type, expected GPU count, and offer where exposed. It asks for `STOP <INSTANCE_ID>`, repeats identity validation under the lock, runs only `vastai stop instance <ID> --raw`, and polls until the exact record satisfies the stopped-state allowlist. Only then does it archive the per-reclaim active state. The instance and disk remain for the next experiment. If it already satisfies that proof, the helper reconciles state without issuing a duplicate mutation.
+
+For `fresh-created`, release asks for `RELEASE <INSTANCE_ID>` and uses guarded destroy:
+
+```bash
+vastai show instance <OWN_INSTANCE_ID> --raw
+vastai destroy instance <OWN_INSTANCE_ID> --yes --raw
+```
+
+Before running destroy, match all three: instance ID, machine ID, and owner label. Destroy is irreversible. The `--yes` above is appropriate only after that independent check; `release-gpu.sh` performs a stronger typed confirmation first. Never select an ID from host-side Docker output.
+
+Vast CLI 1.5.6 can destroy successfully yet emit no JSON from `destroy instance ... --yes --raw`; the command wrapper does not always forward the underlying response. The helper accepts either an explicit JSON `"success": true` or a strict postcondition: `show instance <ID> --raw` must return the absent sentinel (`{"instances": null}`), and `show instances --raw` must use a recognized list shape with no matching ID. If those two checks do not agree after bounded retries, it retains active state and reports failure.
+
+Recovery overrides require all of `--mode`, `--instance-id`, `--machine-id`, and `--expected-label`. This prevents a lost precreated state file from silently defaulting to destructive release.
 
 Then observe the outside interruptible instance. Vast documents automatic resume when priority returns, but timing is not guaranteed. Capture:
 
-- time owner instance was destroyed;
+- time owner instance was stopped or destroyed;
 - time outside bid changes from paused to running;
 - reliability/verification before and after;
 - any error or failed-start event;
@@ -433,9 +499,10 @@ Then observe the outside interruptible instance. Vast documents automatic resume
 
 Call the controlled trial successful only if:
 
+- the interruptible renter is a genuine outside contract, not a same-account self-bid;
 - owner on-demand starts without manual host/container intervention;
 - outside bid is platform-paused with data retained;
-- outside bid auto-resumes after owner instance destruction;
+- outside bid auto-resumes after owner instance stop or destruction;
 - daemon stays online throughout;
 - no client-start failure or red error appears;
 - reliability does not materially fall after the platform updates it;
@@ -478,8 +545,8 @@ For each reclaim test, keep a small change record:
 | Phase | Capture |
 |---|---|
 | Before | UTC time, reliability, verification, daemon online, red errors, contracts/types/statuses, GPU/disk/network health |
-| During | owner create response/ID, bidder pause time, owner running time, daemon heartbeat, health extrema |
-| After release | owner destroy response/time, bidder resume time, failed starts/errors, health |
+| During | owner mode and exact ID, start/create response, bidder pause time, owner running time, daemon heartbeat, health extrema |
+| After release | owner stop/destroy postcondition and time, bidder resume time, failed starts/errors, health |
 | Delayed check | reliability/verification after platform update, earnings interval, client status |
 
 Vast says losing host connection or a client instance failing to start lowers reliability. It does not publish a statement that intended scheduler preemption has zero rating impact. Treat unchanged reliability as something to measure, not assume.
@@ -586,8 +653,12 @@ Do not format or repurpose the client-storage disk until the unlist/contract/vol
 | Self-test fails ports | Range not reachable end-to-end, TCP/UDP mismatch, CGNAT, or too few ports | Fix router and host firewall; test externally; provide at least five/GPU (100/GPU recommended). |
 | Machine does not appear in normal search | Search results show only a subset | Use `vastai search offers 'machine_id=<MACHINE_ID> verified=any'`. |
 | On-demand outside rental appears | High price discouraged but did not prohibit it | Abort owner reclaim and honor the contract through its end date. Current docs have no strict interruptible-only switch. |
+| Owner on-demand create returns HTTP 400 / error 3763 `GPU conflict` during a same-account self-bid test | Vast will not use that account's on-demand instance to preempt its own interruptible instance on the occupied GPU | Destroy only the same-account test instance through its verified ID if one exists. Mark the preemption trial invalid and wait for a genuine outside interruptible contract; do not alter the renter container or host services. |
+| Precreated reclaim refuses to start | Exact ID/machine/label/on-demand/GPU/offer check failed, the record did not report `actual_status=created|exited|stopped` with `intended_status=stopped` and `cur_state=stopped`, or the standby expired | Do not clear the ID or fall back to create while rented. Resolve the exact mismatch; replace the standby only while safely vacant. |
+| `start instance` or `stop instance` prints success-like text but state does not change | CLI 1.5.6 does not provide authoritative machine-readable start/stop results, or scheduling/stop is delayed | Trust only bounded polling of the exact `show instance` record. A start requires `running/running/running`; a stop requires the explicit non-running actual-state allowlist plus both stopped control fields. Run guarded release to stop a stuck start and retain state if the appropriate proof fails. |
 | Bid renter remains running after owner create | Wrong offer/machine, owner creation stopped, or scheduler did not allocate it | Do not touch renter. Inspect owner create result/status and machine contracts; destroy only a failed owner instance and investigate. |
-| Bid renter does not resume after owner release | Priority/bid changed, owner instance still exists, scheduler delay, or client state issue | Confirm owner instance is destroyed and machine/daemon healthy; observe before escalating. Never manually start/kill the renter container. |
+| Destroy exits successfully but prints no JSON with `--raw` | CLI 1.5.6 may not forward the destroy response from its command wrapper | Verify the exact ID returns `{"instances": null}` from `show instance` and is absent from `show instances`. `release-gpu.sh` performs both checks and keeps active state unless both prove absence. |
+| Bid renter does not resume after owner release | Priority/bid changed, reusable owner does not satisfy the safe stopped-state proof, fresh owner still exists, scheduler delay, or client state issue | Confirm the mode-specific release postcondition and machine/daemon health; observe before escalating. Never manually start/kill the renter container. |
 | Reliability drops | Host disconnect or client start failure; other causes may exist | Compare before/during/after record, daemon logs, health and failed starts. Keep host online; stop new listings while diagnosing. |
 | Disk stays allocated after expired/deleted rental | Contract cleanup out of sync | Keep host online and run `vastai cleanup machine <MACHINE_ID>`; never delete live client paths manually. |
 | Need urgent host work | Unplanned maintenance | Schedule official maintenance notice, protect client data, minimize downtime. Notice is not a penalty waiver. |
@@ -606,6 +677,9 @@ Do not format or repurpose the client-storage disk until the unlist/contract/vol
 - [Current official CLI machine-command source](https://github.com/vast-ai/vast-cli/blob/master/vastai/cli/commands/machines.py)
 - [`search offers`](https://docs.vast.ai/cli/reference/search-offers)
 - [`create instance`](https://docs.vast.ai/cli/reference/create-instance)
+- [`start instance`](https://docs.vast.ai/cli/reference/start-instance)
+- [`stop instance`](https://docs.vast.ai/cli/reference/stop-instance)
+- [Managing instances and stopped storage](https://docs.vast.ai/guides/instances/manage-instances)
 - [`show instances`](https://docs.vast.ai/cli/reference/show-instances)
 - [`destroy instance`](https://docs.vast.ai/cli/reference/destroy-instance)
 - [API permission groups](https://docs.vast.ai/api-reference/permissions)

@@ -1,22 +1,28 @@
 # Vast owned-host golden path
 
-This folder is a conservative operating kit for a **dedicated, physically owned** Vast.ai host. Its specific experiment is to sell idle GPU time to interruptible bidders, reclaim the GPU with a free owner-created on-demand Vast instance, and release it so the bidder can resume through Vast's scheduler.
+This folder is a conservative operating kit for a **dedicated physical GPU host under the operator's full control**. Its specific experiment is to sell idle GPU time to interruptible bidders, reclaim the GPU with an owner-created on-demand Vast instance, and release it so the bidder can resume through Vast's scheduler.
 
 Read [`docs/RUNBOOK.md`](docs/RUNBOOK.md) before touching a host.
 
+The completed two-A100 setup, hard storage cap, price display, vacant-host checks, and still-pending outside-renter reclaim evidence are recorded in [`docs/A100-2X-LIVE-TRIAL.md`](docs/A100-2X-LIVE-TRIAL.md).
+
 For the SCAN 4x RTX PRO 6000 candidate, use the staged technical checklist in [`docs/SCAN-4X-RTX-PRO-6000-PILOT.md`](docs/SCAN-4X-RTX-PRO-6000-PILOT.md) before installation or listing.
+
+Use [`docs/ECONOMICS.md`](docs/ECONOMICS.md) for the current ex-VAT 18-period model, exact `RTX PRO 6000 WS` comparables, and transparent three-researcher usage patterns. Recalculate rather than preserving its dated market snapshot.
 
 ## Hard limitation
 
 Vast has no documented host switch that makes a listing strictly interruptible-only. A high on-demand price can discourage outside on-demand rental but cannot prevent it. If an outside on-demand or reserved contract appears, the owner workload must wait and the locked contract must be honored.
 
-Normal reclaim is a Vast-managed priority change:
+The preferred reclaim path reserves the owner's disk before any tenant arrives:
 
-1. Outside interruptible runs.
-2. Owner creates an on-demand instance on the same owned machine.
-3. Vast pauses the interruptible and retains its disk.
-4. Owner destroys only the owner instance after saving its outputs.
+1. While the host is vacant, the owner creates one on-demand instance, gives it a dedicated owner label, and stops it after setup.
+2. Outside interruptible runs; the stopped owner instance keeps its disk but does not reserve a GPU.
+3. Owner starts that exact instance. Vast should pause the outside interruptible and retain its disk.
+4. Owner stops that exact instance after saving outputs, retaining the owner's disk for the next experiment.
 5. Vast documents that the interruptible resumes when it regains priority.
+
+Fresh create/destroy remains available when `VAST_OWN_INSTANCE_ID` is blank. It cannot protect against host disk exhaustion because its disk allocation happens at reclaim time.
 
 Unlisting, stopping the daemon, restarting Docker, powering off, killing containers, changing the minimum bid, and maintenance notice are not reclaim controls. Vast does not explicitly guarantee zero rating impact for owner reclaim, so the trial notes measure reliability before, during, and after.
 
@@ -24,12 +30,21 @@ Unlisting, stopping the daemon, restarting Docker, powering off, killing contain
 
 - `docs/RUNBOOK.md` — complete setup, listing, reclaim, maintenance, payout, cleanup, and troubleshooting guide.
 - `docs/TRIAL-NOTES.md` — sanitized trial record template.
+- `docs/A100-2X-LIVE-TRIAL.md` — evidence from the live two-A100 storage, pricing, qualification, and standby trial, with the outside-renter reclaim result kept explicitly pending.
 - `docs/SCAN-4X-RTX-PRO-6000-PILOT.md` — one-week technical qualification and staged 4-GPU reclaim plan for the published SCAN candidate.
+- `docs/ECONOMICS.md` — SCAN commitment, Vast price/fill, and research-team allocation scenarios with primary sources.
+- `docs/ADAPTIVE-PRICING.md` — guarded P10 interruptible-floor sampling, reliability adjustment, hard bounds, and exact-machine apply checks.
+- `docs/INFERENCE-ALTERNATIVES.md` — researched comparison of raw rentals with inference-worker networks.
 - `scripts/preflight-host.sh` — read-only local requirement checks.
 - `scripts/monitor-machine.sh` — read-only Vast/local health snapshots.
-- `scripts/reclaim-gpu.sh` — guarded owner on-demand creation.
-- `scripts/release-gpu.sh` — verifies the owner instance triple, destroys only that instance, and captures post-release health.
+- `scripts/reclaim-gpu.sh` — verifies and starts a reusable stopped owner instance, or guardedly creates a fresh one when no reusable ID is configured.
+- `scripts/release-gpu.sh` — stops and retains a reusable owner instance, or guardedly destroys a fresh-created one, then captures post-release health.
 - `scripts/unlist-and-cleanup.sh` — guarded unlist plus optional Vast reconciliation of expired/deleted storage.
+- `tools/economics_model.py` — dependency-free 18-period ex-VAT calculator.
+- `tools/usage_patterns.py` — auditable light/normal/campaign/deadline workload calendars.
+- `tools/adaptive_pricing.py` — dry-run-first market sampler and guarded interruptible minimum updater.
+- `tests/fake-cli-tests.sh` — offline lifecycle guardrail checks using a fake Vast CLI.
+- `site/` — source for the private interactive economics and workload dashboard.
 - `.env.example` — non-secret configuration template.
 - `validate.sh` — syntax and repository hygiene checks.
 
@@ -48,21 +63,24 @@ chmod 600 .env
 
 Fill only the non-secret values in `.env`. Configure the scoped Vast API key with the official CLI so it remains in `~/.config/vastai/vast_api_key`; never put a key in `.env`.
 
-After the host is installed, vacant, VM mode is `off`, self-test passes, and the listing is reviewed:
+After the host is installed, vacant, VM mode is `off`, self-test passes, and the listing is reviewed, prepare a reusable owner instance using the runbook. Set its exact ID as `VAST_OWN_INSTANCE_ID`, its dedicated label prefix as `VAST_OWN_LABEL_PREFIX`, and the reviewed GPU count/offer where available. The instance must report `is_bid=false` and the safe stopped-state tuple: `actual_status` is explicitly `created`, `exited`, or `stopped`, and both `intended_status` and `cur_state` are `stopped`. Missing fields or any other actual state are rejected.
+
+Then preview reclaim:
 
 ```bash
 ./scripts/monitor-machine.sh --snapshot
 ./scripts/reclaim-gpu.sh
 ```
 
-The second command previews the exact creation. After reviewing Host Machines/Contracts and confirming there is no outside on-demand or reserved contract, one guarded invocation performs the reclaim:
+The second command previews `start instance <VAST_OWN_INSTANCE_ID>`. It validates the exact ID, machine, owner label prefix, on-demand type, GPU count/offer where exposed, and stopped state. Any failure aborts; pre-created mode never falls back to a fresh create. After reviewing Host Machines/Contracts and confirming there is no outside on-demand or reserved contract, one guarded invocation performs the reclaim:
 
 ```bash
 ./scripts/reclaim-gpu.sh --contracts-reviewed --apply
 ```
 
-It asks the operator to type `RECLAIM <machine-id>` and records the returned owner instance ID outside the repository.
-Before calling Vast, it also writes a private pending marker. If creation is interrupted or its response cannot be parsed, do not rerun reclaim: inspect Vast Instances for the marker's label and resolve that attempt first. A lock also prevents two local helpers from creating owner instances concurrently.
+It asks the operator to type `START <instance-id> ON <machine-id>`, writes mode-tagged private state before starting, and proves that exact instance reached the three-field running state. Vast CLI start/stop output and exit status are not authoritative, so the helper resolves the outcome through bounded `show instance` polling. If start remains uncertain, active state stays in place and release can stop or cancel the exact attempt.
+
+When `VAST_OWN_INSTANCE_ID` is blank, the preview instead shows a fresh create. That mode asks for `RECLAIM <machine-id>`, writes a pending marker before the non-idempotent call, and records the returned ID. If its response is uncertain, inspect Vast Instances for the recorded label before doing anything else.
 
 After owner outputs are saved:
 
@@ -71,8 +89,9 @@ After owner outputs are saved:
 ./scripts/release-gpu.sh --apply
 ```
 
-Release requires a matching instance ID, machine ID, and owner label before it offers to destroy anything. It then captures read-only health snapshots while the operator verifies the outside interruptible resumes in Host Machines/Contracts.
-The helper passes the CLI's noninteractive `--yes` only after its own stronger typed confirmation, and it archives active state only after Vast returns JSON with `success: true`.
+Release reads the recorded mode and repeats the exact ID, machine, and label checks under a lock. For `precreated`, it offers only `stop instance`, proves the same safe stopped-state tuple, keeps the instance and disk, and archives the session state. For `fresh-created`, it offers only guarded destroy and refuses any ID currently configured as `VAST_OWN_INSTANCE_ID`. It passes the CLI's noninteractive `--yes` after its own typed confirmation and archives state after either JSON `success: true` or matching absence from both `show instance` and `show instances`.
+
+Stopped instances continue to incur storage charges, their disk size cannot be changed, and they do not reserve a GPU. Restart is still scheduler-dependent; pre-creating protects disk capacity, not GPU availability or guaranteed preemption.
 
 To stop accepting new rentals:
 

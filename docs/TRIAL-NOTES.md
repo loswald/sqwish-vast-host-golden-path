@@ -12,6 +12,7 @@ Keep this file free of IP addresses, account names, machine IDs, instance IDs, A
 - Offer end boundary (relative description only):
 - Interruptible floor rationale:
 - On-demand deterrent rationale:
+- Interruptible renter: genuine outside contract / same-account invalid control:
 
 ## Vacant-host self-test
 
@@ -35,8 +36,12 @@ Keep this file free of IP addresses, account names, machine IDs, instance IDs, A
 
 ## During reclaim
 
-- Owner on-demand create succeeded:
-- Owner instance reached `running`:
+- Reclaim mode: precreated start/stop / fresh create/destroy
+- Precreated owner exact ID/machine/label/type/GPU/offer validation passed:
+- Pre-reclaim status fields (`actual_status` / `intended_status` / `cur_state`):
+- Owner start/create command issued:
+- Owner running proof (`running` / `running` / `running`):
+- Owner billing object GPU cost / disk cost (do not confuse with public search price):
 - Outside interruptible moved to platform-paused state:
 - Pause delay:
 - Daemon stayed online:
@@ -45,7 +50,9 @@ Keep this file free of IP addresses, account names, machine IDs, instance IDs, A
 
 ## After release
 
-- Destroyed owner instance only:
+- Release action: precreated stop / fresh destroy
+- Precreated post-release status fields (`actual_status` / `intended_status` / `cur_state`) and disk retained:
+- Fresh destroy confirmation: explicit `success: true` / absent from both CLI views / not applicable
 - Outside interruptible automatically resumed:
 - Resume delay:
 - Daemon stayed online:
@@ -64,3 +71,5 @@ Keep this file free of IP addresses, account names, machine IDs, instance IDs, A
 - Rating-impact conclusion: unknown / no observed change / observed change
 
 Do not convert “no observed change” into a general guarantee. Vast does not explicitly document zero rating impact for a host reclaim through scheduler preemption.
+
+A same-account interruptible rental followed by a same-account owner on-demand create is not an accepted reclaim trial. The observed platform response was HTTP 400 / error 3763 (`GPU conflict`), so this setup does not test priority over an outside interruptible renter.

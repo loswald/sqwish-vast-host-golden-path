@@ -31,6 +31,23 @@ require_uint() {
   [[ "$value" =~ ^[1-9][0-9]*$ ]] || die "$name must be a positive integer"
 }
 
+instance_status_is_safely_stopped() {
+  local actual_status="${1-}" intended_status="${2-}" cur_state="${3-}"
+
+  case "$actual_status" in
+    created|exited|stopped) ;;
+    *) return 1 ;;
+  esac
+  [[ "$intended_status" == stopped && "$cur_state" == stopped ]]
+}
+
+instance_status_is_exactly_running() {
+  local actual_status="${1-}" intended_status="${2-}" cur_state="${3-}"
+  [[ "$actual_status" == running \
+     && "$intended_status" == running \
+     && "$cur_state" == running ]]
+}
+
 load_env_file() {
   local path="${1:-${PROJECT_DIR}/.env}"
   if [[ -f "$path" ]]; then
@@ -58,7 +75,7 @@ state_dir() {
 
 ensure_state_dir() {
   local dir
-  dir="$(state_dir)"
+  dir="$(state_dir)" || return 1
   mkdir -p -- "$dir"
   chmod 700 -- "$dir" 2>/dev/null || true
   printf '%s\n' "$dir"
