@@ -4,6 +4,7 @@ This repository covers a dedicated physical Vast.ai GPU host under full operator
 
 ## Non-negotiable facts
 
+0. This kit is for a dedicated physical machine whose provider expressly permits third-party hosting. Do not install or list a Vast host on a third-party cloud VM without the provider's prior written approval. A cheap public listing can admit a miner for only a few minutes, trigger a provider abuse event, and disappear between polling intervals.
 1. Current official documentation exposes no strictly interruptible-only host switch. A high on-demand price is a deterrent, not a guarantee.
 2. An outside on-demand or reserved contract has high priority and must be honored through its locked end date.
 3. Unlisting blocks new contracts only. It never changes an existing contract.
@@ -12,6 +13,7 @@ This repository covers a dedicated physical Vast.ai GPU host under full operator
 6. Vast documents automatic resume when an interruptible regains priority. The combined owner-reclaim behavior is an evidence-backed inference until a controlled trial passes.
 7. Vast does not explicitly guarantee zero rating impact. Always measure reliability/verification before, during, immediately after, and after a delayed platform update.
 8. A same-account interruptible instance cannot validate outside-renter preemption. The observed owner on-demand attempt was rejected with HTTP 400/error 3763 (`GPU conflict`); wait for a genuine outside interruptible contract.
+9. A vacant current-state card does not prove that no rental occurred. The cloud-VM incident in `docs/INCIDENT-CLOUD-MINER.md` involved an approximately four-minute workload that a five-minute monitor missed. Preserve event-level contract and egress logs, and treat any unexplained earnings as evidence requiring investigation.
 
 ## Before acting
 

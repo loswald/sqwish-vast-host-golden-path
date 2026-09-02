@@ -4,6 +4,8 @@ This folder is a conservative operating kit for a **dedicated physical GPU host 
 
 Read [`docs/RUNBOOK.md`](docs/RUNBOOK.md) before touching a host.
 
+**Do not use this kit to host on a third-party cloud VM unless that provider has given prior written approval for both third-party hosting and the resulting workloads.** A September 2026 cloud-VM trial admitted a roughly four-minute miner workload that disappeared between five-minute polls and triggered a cryptocurrency-abuse case. Read [`docs/INCIDENT-CLOUD-MINER.md`](docs/INCIDENT-CLOUD-MINER.md) before evaluating any non-owned infrastructure.
+
 The completed two-A100 setup, hard storage cap, price display, vacant-host checks, and still-pending outside-renter reclaim evidence are recorded in [`docs/A100-2X-LIVE-TRIAL.md`](docs/A100-2X-LIVE-TRIAL.md).
 
 For the SCAN 4x RTX PRO 6000 candidate, use the staged technical checklist in [`docs/SCAN-4X-RTX-PRO-6000-PILOT.md`](docs/SCAN-4X-RTX-PRO-6000-PILOT.md) before installation or listing.
@@ -35,6 +37,7 @@ Unlisting, stopping the daemon, restarting Docker, powering off, killing contain
 - `docs/ECONOMICS.md` — SCAN commitment, Vast price/fill, and research-team allocation scenarios with primary sources.
 - `docs/ADAPTIVE-PRICING.md` — guarded P10 interruptible-floor sampling, reliability adjustment, hard bounds, and exact-machine apply checks.
 - `docs/INFERENCE-ALTERNATIVES.md` — researched comparison of raw rentals with inference-worker networks.
+- `docs/INCIDENT-CLOUD-MINER.md` — sanitized postmortem for the short-lived miner workload missed by polling during the cloud-VM trial.
 - `scripts/preflight-host.sh` — read-only local requirement checks.
 - `scripts/monitor-machine.sh` — read-only Vast/local health snapshots.
 - `scripts/reclaim-gpu.sh` — verifies and starts a reusable stopped owner instance, or guardedly creates a fresh one when no reusable ID is configured.
