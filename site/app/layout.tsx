@@ -18,11 +18,11 @@ export const metadata: Metadata = {
   ),
   title: 'Sqwish GPU Slack Lab',
   description:
-    'Explore the economics and operating loop for renting spare Sqwish GPUs on Vast.ai, reclaiming them for research, and relisting them afterward.',
+    'Explore the economics and tested operating limits of renting spare Sqwish GPUs on Vast.ai, draining them for research, and relisting them afterward.',
   openGraph: {
     title: 'Sqwish GPU Slack Lab',
     description:
-      'Model spare-GPU rentals, researcher reclaim, and relisting through Vast.ai interruptible capacity.',
+      'Model spare-GPU rentals, research demand, and the tested limits of Vast.ai interruptible capacity.',
     images: [{ url: '/og.png', width: 1536, height: 1024 }],
     type: 'website',
   },
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Sqwish GPU Slack Lab',
     description:
-      'Explore the economics and operating loop for renting spare GPUs, reclaiming them for research, and relisting them afterward.',
+      'Explore spare-GPU economics and the tested limits of reclaiming Vast.ai interruptible capacity for research.',
     images: ['/og.png'],
   },
 };

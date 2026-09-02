@@ -12,6 +12,35 @@ snapshots/
 vast_host_install.log
 vast_host_uninstall.log
 
+# Defense in depth for every private runtime path used by the Python helpers.
+# The helpers also reject VAST_STATE_DIR inside this repository, but these
+# patterns prevent an accidental copy from being staged.
+adaptive-pricing/
+original-reliability-baselines/
+verification-qualification/
+qualification-mode.json
+qualification-owner-mutation.lock/
+controlled-acquisitions/
+controlled-acquisition.lock/
+controlled-acquisition-listing-unresolved.json
+controlled-acquisition-create-unresolved.json
+controlled-acquisition-contract-unresolved.json
+controlled-hostjob-cycles/
+controlled-hostjob-cycle.lock/
+controlled-owner-standby-cycles/
+controlled-owner-standby-cycle.lock/
+controlled-24h-pilots/
+controlled-24h-pilot.lock/
+controlled-24h-cleanups/
+controlled-24h-cleanup-state/
+controlled-24h-cleanup.lock/
+owner-standby-preparations/
+prepare-owner-standby.lock/
+owner-standby-listing-unresolved.json
+owner-standby-create-unresolved.json
+owner-standby-instance-unresolved.json
+owner-standbys/
+
 # Python bytecode and local test caches.
 __pycache__/
 *.py[cod]

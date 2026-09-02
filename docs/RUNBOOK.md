@@ -1,12 +1,12 @@
 # Vast.ai owned-host golden-path runbook
 
-> **Scope:** A dedicated physical GPU server under full operator control that may be offered cheaply to interruptible bidders, then reclaimed through Vast's documented Host Job scheduler path. The measured two-A100 cycle failed automatic renter return and the rating-safety gate. Owner-created on-demand reclaim remains experimental. This runbook is not a promise of earnings or safe preemption.
+> **Scope:** A dedicated physical GPU server under full operator control that may offer explicitly released capacity to Vast. Three clean Host Job attempts left the interruptible renter running. A later exact pre-created owner on-demand standby paused the controlled renter, reached running in 82.281 seconds, stopped, and returned the renter automatically. This proves one technical scheduler cycle, but Sqwish's rating-safe production gate remains **BLOCKED** because the machine was already below its immutable original reliability baseline and the delayed observation did not complete. This runbook is not a promise of earnings or penalty-free preemption.
 >
 > **Source convention:** **Verified** means an official Vast document, the current Host Setup page, or the current official installer/uninstaller was checked. **Inferred** means the workflow combines separately documented features and still needs one controlled end-to-end trial.
 
 ## Future-agent entry point
 
-The operating idea is simple: list otherwise idle GPUs for interruptible work, let a research request outbid only those interruptible contracts through Vast's Host Job scheduler, run the owner workload, then lower the Host Job so the existing renter can return. When no contract remains, the machine can accept a new interruptible bid. The last two steps are the unresolved part: the measured renter did not return automatically, and the rating measurement was confounded.
+The desired loop is to list idle GPUs, reclaim them when research arrives, then return them to the market. The controlled two-A100 pilot demonstrated that loop once with a pre-created own-machine **on-demand** standby: the exact interruptible paused, owner start completed inside 15 minutes, owner stop succeeded, and the renter returned automatically. Host Jobs still did not work as a reclaim mechanism. Keep the standby path diagnostic until it passes repeated dedicated-box cycles at or above the immutable original reliability baseline, including delayed observations, and Vast clarifies whether ongoing research workloads belong on this own-machine path or only its Jobs path.
 
 Use these documents in order:
 
@@ -23,24 +23,22 @@ Use these documents in order:
 |---|---|---|
 | A dedicated XFS Docker pool can bound Vast's total host storage away from `/` | **Proved on the two-A100 trial** | Recreate and verify the boundary on the delivered box before installing Vast. |
 | A separate controlled account can acquire the exact full-machine interruptible and the host can immediately unlist | **Proved once** | Repeat with an exact machine, offer, label, GPU-count, and account-identity proof. |
-| A Host Job can take both GPUs from that lower interruptible contract | **Observed once** | The observed scheduler fanned out into two one-GPU jobs and required the host to be relisted. Treat both behaviors as topology/version-specific. |
-| Owner reclaim is near-instant | **Observed once, about 2.8 seconds after the required relist** | Keep a 30-second internal start limit, but do not call it an SLA. |
-| Lowering the Host Job returns the renter automatically | **Failed** | The client was still stopped after more than 79 seconds and needed its own account to issue Start. A host cannot perform that recovery for a public renter. |
-| Reclaim has no reliability or rating cost | **Unproved** | Reliability fell during a malformed-launch/reclaim sequence. Require a clean immediate, post-cleanup, two-hour, 24-hour, and seven-day observation before production use. |
+| A Host Job can take both GPUs from a running interruptible contract | **Failed in three clean attempts** | High inputs of $1.10 for 30 seconds, $1.30 for 90 seconds, and $3.00/GPU-hour for 120 seconds left the renter running. Price is not a documented preemption control. |
+| Owner reclaim completes within 15 minutes | **Proved once with an exact pre-created on-demand standby** | Decision-to-owner-running was 82.281 seconds. Vast publishes no self-preemption latency SLA; repeat on the dedicated box before scheduling around it. |
+| A pre-created free own-machine on-demand standby can pause an interruptible | **Proved once diagnostically** | The exact two-GPU controlled interruptible reached the safe-stopped tuple before the owner was accepted as running. This does not authorize arbitrary host/container eviction. |
+| A displaced renter returns automatically | **Proved once diagnostically** | After exact owner stop, the same controlled interruptible returned without fallback Start. Repeat and verify checkpoint integrity on the dedicated box. |
+| Reclaim has no reliability or rating cost | **Not proved** | Reliability started at 0.5999925, briefly reached 0.599997, then fell to 0.5727243 during the restart/new-client sequence. The later successful standby handoff stayed flat at 0.5727243 immediately and after cleanup, but remained below the original baseline and lacked a delayed check. |
 | One-, two-, and four-GPU owner jobs assemble and release four independent slices correctly | **Unproved** | Run the staged four-GPU qualification; never extrapolate the two-A100 result. |
 
-### Intended spare-capacity loop
+### Production operating modes
 
-Keep this loop disabled for public renters until automatic return and the rating gate pass on the dedicated box:
+Do not run an automated public-renter reclaim loop. Choose one of these modes:
 
-1. **Vacant:** keep the reviewed Host Job at its low value and list the intended GPU grouping with a fixed end, no volume offer, a physical Docker-pool cap, and fully specified GPU, disk, upload, and download prices.
-2. **Rented:** record the exact interruptible contract and its locked terms. If any on-demand or reserved contract exists, owner work waits for that contract to end.
-3. **Research request:** reconcile the host's Contracts view, machine health, exact renter type, owner definition, rating baseline, and current bid. Raise only the pre-reviewed Host Job above the interruptible. If the current scheduler still needs a relist, use the guarded fixed-end procedure and continuously watch for a new contract.
-4. **Owner running:** prove every expected owner job is `running/running/running`, has a distinct expected GPU, and produced the bounded workload proof. Stop on overlap, missing jobs, host errors, or a rating/verification change.
-5. **Return:** lower the Host Job below the renter, prove the owner jobs release their GPUs, and wait for the exact renter to return automatically with its disk/checkpoint intact. A controlled qualification may use the exact client account's guarded Start only after recording the automatic-return failure. That recovery still fails the gate.
-6. **Available again:** an existing renter resumes its locked contract. When it later ends, prove vacancy and storage reconciliation, then accept a new interruptible bid under a fresh fixed end and fresh market terms.
+1. **Explicit release:** researchers mark a GPU or whole node available for the full advertised contract window. List only that released capacity.
+2. **Drain:** unlist to block new contracts, wait for every existing contract to reach its locked end date, prove vacancy, and then schedule research work.
+3. **Reserve:** keep enough GPUs permanently unlisted for burst demand and sell only surplus capacity that the team can leave untouched.
 
-Do not automate this around public renters while step 5 or the delayed rating checks fail. A public renter's credentials are unavailable to the host, so there is no general manual-return fallback.
+The controlled acquisition, Host Job controller, and owner-standby controller remain diagnostic tools. They are not production reclaim automation.
 
 ## The decision gate
 
@@ -48,9 +46,13 @@ Do not list the machine until everyone responsible for it accepts these facts:
 
 1. **Verified limitation:** Vast has no documented `interruptible-only` host switch. `vastai list machine` exposes both an on-demand GPU price and an optional interruptible minimum bid. A very high on-demand price can make outside on-demand rental unattractive, but cannot make it impossible.
 2. **Verified contract rule:** A client rental locks the price, hardware specifications, and offer end date. Repricing, shortening the offer, or unlisting affects future rentals only. It does not end an existing contract.
-3. **Verified priority rule:** On-demand and reserved instances have priority over interruptible instances. An interruptible instance may be paused when on-demand is requested; its data remains, and it resumes when it regains priority.
-4. **Measured Host Job limitation:** A controlled two-A100 Host Job reclaimed both GPUs through Vast's scheduler, but the interruptible client did not auto-resume within more than 79 seconds after release and needed its own Start action. A separate owner on-demand reclaim remains experimental. Vast does not publish a host-specific "reclaim with no rating effect" guarantee, and the measured cycle included a confounded reliability decrease. Keep production reclaim disabled until a clean dedicated-hardware trial passes every acceptance criterion below.
-5. **Verified maintenance rule:** Unlisting, taking the host offline, restarting Docker, killing a renter container, or using maintenance notice is not the reclaim mechanism. Vast says all rental contracts must be honored and machines should remain online.
+3. **Verified priority rule:** On-demand and reserved instances have priority over interruptible instances. Among interruptibles, higher bids have priority. A paused interruptible retains its data and resumes when it regains priority. This rule does not say a Host Job price evicts a renter.
+4. **Measured Host Job limitation:** The official `set defjob` page describes a background job and its price field; it publishes no renter-preemption behavior, latency SLA, or rating exemption. Clean Host Job inputs of $1.10/30 seconds, $1.30/90 seconds, and $3.00/GPU-hour/120 seconds did not pause the controlled renter. Keep production reclaim disabled.
+5. **Measured standby result:** The exact owner on-demand standby reached running in 82.281 seconds while the exact interruptible moved to its safe-stopped tuple. Exact owner stop then returned that renter automatically without fallback. A separate post-pilot probe proved a real two-GPU PyTorch CUDA workload on the standby.
+6. **Measured reliability result:** The machine began at 0.5999925, briefly reached 0.599997, and fell to 0.5727243 during a restart/new-client sequence before the clean handoff attempts. The successful standby cycle was 0.5727243 before takeover, immediately after it, and after cleanup. Flat observations below the immutable original baseline do not establish rating safety, and the delayed check was skipped at the disposable host's preconfigured automatic-deletion deadline.
+7. **Verified maintenance rule:** Unlisting, taking the host offline, restarting Docker, killing a renter container, or using maintenance notice is not a reclaim mechanism. Vast says all rental contracts must be honored and machines should remain online.
+
+Sqwish's chosen market shape is a prohibitively high reviewed outside on-demand price, zero reserved discount, and an attractive comparable-market P10 interruptible price. The 15-minute model admits only interruptible tenants. Treat any outside on-demand or reserved contract as an invariant violation: unlist, do not attempt owner takeover, and honor that contract through its locked end. The controller must check this live rather than inferring it from the configured prices.
 
 If strictly preventing all outside on-demand or reserved rentals is a hard requirement, stop here. The current documented host controls cannot guarantee it.
 
@@ -69,7 +71,7 @@ Recommended role split:
 
 Keep `billing_write`, `team_write`, and `user_write` away from routine operator keys. Team owners/managers can create custom roles in the Team dashboard. Use one API key per operator or automation, name it for its purpose, grant the smallest permission set, and revoke it when unused.
 
-For controlled qualification, keep the host and client CLI credentials in separate private configuration directories and expose them through two different wrapper executables. Do not accept different filenames as proof of different accounts. Query the authenticated identity through each wrapper and require two distinct positive account IDs before any listing or reclaim mutation. [`CLEAN-HOSTJOB-CYCLE.md`](CLEAN-HOSTJOB-CYCLE.md) defines the wrapper and identity checks. Never pass an API key on a command line or write it into the repository.
+For controlled qualification, keep the host and client CLI credentials in separate private configuration directories and expose them through two different wrapper executables. Each wrapper must unset inherited `VAST_API_KEY` and set its own `HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, and `XDG_STATE_HOME`; changing `HOME` alone does not isolate the account. Do not accept different filenames as proof of different accounts. Query the authenticated identity through each wrapper and require two distinct positive account IDs before any listing or reclaim mutation. [`CLEAN-HOSTJOB-CYCLE.md`](CLEAN-HOSTJOB-CYCLE.md) defines the wrapper and identity checks. Never pass a persistent API key on a command line or write any credential into the repository. The official host installer currently accepts its separate one-hour installation credential as an argument; the bounded exception and its residual process-list exposure are documented below.
 
 Before generating the installation command:
 
@@ -97,6 +99,8 @@ Run these checks on a vacant dedicated server before installing Vast software.
 - At least five forwarded ports per GPU; Vast recommends 100 per GPU. A different Host Setup screen has historically shown three as a minimum, but use the stricter current Verification Stages requirement of five.
 - SSD storage, at least 200 GB dedicated to Docker container storage, and at least 20 GB free on `/`.
 - Reliability over 90% for verification. New machines start lower and grow with stable uptime.
+
+The low initial score is expected platform behavior, not a value the controller can raise. Vast says a stable new machine typically grows past 90% within a few days. Preserve continuous uptime: the trial's restart is a plausible explanation for the observed `0.5999925` to `0.5727243` movement, although the evidence cannot isolate causation. The same verification page says personal workloads can automatically fail verification, while the host-responsibility section says host work must use Jobs or `create job`. Before adopting the own-machine on-demand standby for daily research, obtain Vast's written interpretation and decide whether production owner work must use the Jobs path. A successful scheduler handoff alone does not qualify the host.
 
 Basic inspection:
 
@@ -224,38 +228,89 @@ auth_error: Invalid user key
 
 The Copy button currently supplies the full 64-character key. Never paste either key into chat, a repository, an issue, a screenshot, or command output. Do not substitute a Manage Keys API key.
 
-If the context was switched, hard-reload first, create a fresh one-hour command, press **Copy**, and paste it directly into a private root shell.
+If the context was switched, hard-reload first, create a fresh one-hour command,
+press **Copy**, and paste the key only into the hidden prompt in the private root
+flow below.
 
 ### Standard installer
 
-Use the exact command copied from Host Setup. Its current shape is:
+Download the installer without executing it. Obtain its expected SHA-256 through
+an independent authenticated Vast channel, such as a digest supplied by support,
+and compare it before granting root privileges. If Vast cannot supply a digest,
+stop and resolve that trust decision rather than treating HTTPS or a second
+download from the same URL as independent verification.
 
 ```bash
-wget https://console.vast.ai/install -O install
-sudo python3 install <FULL_ONE_HOUR_INSTALL_KEY_FROM_COPY_BUTTON> --interactive
-history -d $((HISTCMD-1))
+sudo -i
+install -d -m 700 /root/vast-host-install-review
+cd /root/vast-host-install-review
+umask 077
+curl --proto '=https' --tlsv1.2 --fail --location \
+  https://console.vast.ai/install --output install
+read -r -p 'Paste independently supplied installer SHA-256: ' vast_install_sha256 </dev/tty
+printf '%s  %s\n' "$vast_install_sha256" install | sha256sum --check --strict
+unset vast_install_sha256
+python3 -m py_compile install
+set +o history
+read -r -s -p 'Paste one-hour Vast installation key: ' vast_install_key </dev/tty
+printf '\n' >/dev/tty
+python3 install "$vast_install_key" --interactive
+unset vast_install_key
+set -o history
 ```
 
-The interactive flow asks for the first and last direct ports. Read every disk and networking prompt before answering. The default installer log is `vast_host_install.log` in the working directory.
+The interactive flow asks for the first and last direct ports. Read every disk
+and networking prompt before answering. The default installer log is
+`vast_host_install.log` in the working directory. The one-hour key is not placed
+in shell history or a file, but the installer's required argument can be visible
+briefly in the process list. Run it only in a private root session on the
+dedicated host with no untrusted local users. Ask Vast for an stdin/file-based
+credential path before using the installer on a shared system.
 
 ### Guided installer
 
-The current guided flow is:
+The guided installer is a native binary. Do not execute it as root until its
+exact digest has been independently supplied and verified. Prefer the
+inspectable standard Python installer above. If the guided flow is required:
 
 ```bash
-wget https://s3.amazonaws.com/public.vast.ai/host-installer-wizard-linux-x86_64 -O install-wizard
-sudo chmod +x ./install-wizard
-wget https://console.vast.ai/install -O install
-sudo ./install-wizard --installer-path ./install --api-key <FULL_ONE_HOUR_INSTALL_KEY_FROM_COPY_BUTTON>
-history -d $((HISTCMD-1))
+sudo -i
+install -d -m 700 /root/vast-host-install-review
+cd /root/vast-host-install-review
+umask 077
+curl --proto '=https' --tlsv1.2 --fail --location \
+  https://s3.amazonaws.com/public.vast.ai/host-installer-wizard-linux-x86_64 \
+  --output install-wizard
+read -r -p 'Paste independently supplied wizard SHA-256: ' vast_wizard_sha256 </dev/tty
+printf '%s  %s\n' "$vast_wizard_sha256" install-wizard | sha256sum --check --strict
+unset vast_wizard_sha256
+chmod 700 ./install-wizard
+curl --proto '=https' --tlsv1.2 --fail --location \
+  https://console.vast.ai/install --output install
+read -r -p 'Paste independently supplied installer SHA-256: ' vast_install_sha256 </dev/tty
+printf '%s  %s\n' "$vast_install_sha256" install | sha256sum --check --strict
+unset vast_install_sha256
+python3 -m py_compile install
+set +o history
+read -r -s -p 'Paste one-hour Vast installation key: ' vast_install_key </dev/tty
+printf '\n' >/dev/tty
+./install-wizard --installer-path ./install --api-key "$vast_install_key"
+unset vast_install_key
+set -o history
 ```
 
 ### Existing-Docker recovery only
 
 ```bash
-wget https://console.vast.ai/install -O install
-sudo python3 install <FULL_ONE_HOUR_INSTALL_KEY_FROM_COPY_BUTTON> --no-docker
-history -d $((HISTCMD-1))
+# First download and independently verify ./install exactly as above.
+sudo -i
+cd /root/vast-host-install-review
+set +o history
+read -r -s -p 'Paste one-hour Vast installation key: ' vast_install_key </dev/tty
+printf '\n' >/dev/tty
+python3 install "$vast_install_key" --no-docker
+unset vast_install_key
+set -o history
 ```
 
 Do not use `--no-docker` to bypass a failed Docker setup. Fix the host or rerun the standard installer.
@@ -296,26 +351,41 @@ The final result must be `off`.
 
 ## Install and authenticate the CLI
 
-Install the official CLI on a separate trusted operator machine when possible:
+Install the official CLI on a separate trusted operator machine when possible.
+Do not pipe a network response directly into a shell. Download it, inspect it,
+record its digest, and compare that digest with an independently authenticated
+Vast value before executing it:
 
 ```bash
-curl -fsSL https://vast.ai/install.sh | bash
-# Alternative: python3 -m pip install --user vastai
+umask 077
+curl --proto '=https' --tlsv1.2 --fail --location \
+  https://vast.ai/install.sh --output vast-cli-install.sh
+read -r -p 'Paste independently supplied CLI installer SHA-256: ' vast_cli_sha256 </dev/tty
+printf '%s  %s\n' "$vast_cli_sha256" vast-cli-install.sh \
+  | sha256sum --check --strict
+unset vast_cli_sha256
+less vast-cli-install.sh
+bash vast-cli-install.sh
 ```
 
 Create a scoped persistent API key in the intended Team context. For host listing only, grant `machine_read` and `machine_write`. For the reclaim workflow, also grant `misc`, `instance_read`, and `instance_write`.
 
 ```bash
-vastai set api-key <SCOPED_PERSISTENT_API_KEY>
+install -d -m 700 ~/.config/vastai
+umask 077
+read -r -s -p 'Paste scoped Vast API key: ' vast_scoped_key </dev/tty
+printf '\n' >/dev/tty
+printf '%s\n' "$vast_scoped_key" > ~/.config/vastai/vast_api_key
+unset vast_scoped_key
+chmod 600 ~/.config/vastai/vast_api_key
 vastai show user
 vastai show machines
 ```
 
-`vastai set api-key` stores the key in `~/.config/vastai/vast_api_key`. Set restrictive permissions and never copy this file into the repository:
-
-```bash
-chmod 600 ~/.config/vastai/vast_api_key
-```
+The CLI reads the same `~/.config/vastai/vast_api_key` file. Writing it from a
+hidden, non-exported shell variable avoids exposing the persistent key through
+`vastai set api-key ...` process arguments. Never copy this file into the
+repository, logs, chat, or evidence.
 
 Use separate read-only and mutation keys where useful. `billing_read` is sufficient for earnings review. `user_write`, `billing_write`, and `team_write` are not needed by the host/reclaim scripts.
 
@@ -339,15 +409,20 @@ That flag does not make the host verification-eligible and still requires at lea
 Test the client path on the owner account as Vast documents:
 
 ```bash
+PYTORCH_TAG=pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+PYTORCH_DIGEST="$(docker buildx imagetools inspect "$PYTORCH_TAG" | awk '$1 == "Digest:" {print $2; exit}')"
+[[ "$PYTORCH_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+OWNER_IMAGE="${PYTORCH_TAG}@${PYTORCH_DIGEST}"
+
 vastai search offers 'machine_id=<MACHINE_ID> verified=any'
 vastai create instance <OWN_ON_DEMAND_OFFER_ID> \
-  --image pytorch/pytorch:latest \
+  --image "$OWNER_IMAGE" \
   --jupyter --direct \
   --env '-e TZ=UTC -p 22:22 -p 8080:8080' \
   --cancel-unavail
 ```
 
-Do **not** pass `--bid_price`; omission creates an on-demand instance. Verify direct SSH, Jupyter, GPU visibility, disk isolation, and both TCP/UDP port allocation as applicable. Then destroy only the test instance:
+Review the resolved manifest before use and retain the exact `tag@sha256` value in private operations state. Do **not** pass `--bid_price`; omission creates an on-demand instance. Verify direct SSH, Jupyter, GPU visibility, disk isolation, and both TCP/UDP port allocation as applicable. Then destroy only the test instance:
 
 ```bash
 vastai destroy instance <OWN_TEST_INSTANCE_ID>
@@ -411,38 +486,51 @@ This changes future bid acceptance. Do not use it to evict an existing renter.
 
 Do not wait for an unknown public renter to validate reclaim. Vast's official hosting guide documents a separate client account on a different email as a supported way to test the full client experience. Prepare that account before exposing the offer:
 
-1. Keep the machine in the dedicated host account. Stage an official Host Job below the planned client bid, and create the stopped owner on-demand test standby while vacant.
+1. Keep the machine in the dedicated host account. Stage a diagnostic Host Job while vacant, and create any stopped owner on-demand test standby only for a separately approved experiment.
 2. Create and authenticate a separate operator-controlled client account, add enough credit for the short test, and prepare its exact-machine CLI search/create commands.
-3. For the first test, set `min_chunk` to the full GPU count and have the controlled client request every exposed GPU. Sample P99 from bid-offer `min_bid`, which is the renter-facing whole-machine hourly total. Convert that total to host `price_min_bid` per GPU before listing: at the currently observed four-thirds renter surcharge, `host floor = renter P99 * 0.75 / GPU count`. Re-derive the live factor from the exact offer. The recorded two-A100 snapshot was `$1.60/machine-hour`, so its two-GPU host floor was `$0.60/GPU-hour`. A percentile price is a deterrent, not an allowlist.
-4. List only when the client command is ready. Search by exact machine ID, verify the exact offer's machine-total `min_bid`, create the controlled interruptible instance immediately with a whole-machine `--bid_price` above it, and verify the returned instance belongs to the intended machine and has the full GPU allocation. The recorded test used `--bid_price 1.61` against `min_bid=1.60`. Never multiply the offer's `min_bid` by GPU count.
+3. For the owner-standby pilot, set `min_chunk` to the full GPU count and have the controlled client request every exposed GPU. Sample P10 from comparable bid-offer `min_bid` values, which are renter-facing whole-machine hourly totals. Convert that total to host `price_min_bid` per GPU before listing: at the observed four-thirds renter surcharge, `host floor = renter P10 * 0.75 / GPU count`. Re-derive the factor from the exact offer. The final 17-comparable snapshot produced `$0.7466667/machine-hour` P10 and a `$0.28/GPU-hour` host floor. A percentile price is a market setting, not an allowlist.
+4. List only when the client command is ready. Search by exact machine ID, verify the exact offer's machine-total `min_bid`, create the controlled interruptible instance once with a unique label and a whole-machine `--bid_price` that clears it, and verify the returned instance belongs to the intended machine and has the full GPU allocation. Never multiply the offer's `min_bid` by GPU count. The final outside on-demand deterrent was `$5.84/GPU-hour` host-side, or `$15.5733/hour` for the renter-visible pair; reserved discount was zero.
 5. Unlist the machine as soon as that controlled contract is proven running. Unlisting now blocks any further contracts while preserving the controlled test contract.
-6. The live two-A100 test found that Host Jobs remained inert while the machine was unlisted and scheduled only after relisting. Under the same guarded full-GPU listing, relisting produced two one-GPU jobs. A host input of `$1.30/GPU-hour` appeared as `dph_base=$1.733333` on each and preempted the `$1.61/machine-hour` two-GPU client; `$0.65/GPU-hour` appeared as `$0.866667` each and did not. Treat this only as measured behavior, not a scheduler formula. Watch continuously for unexpected contracts during the required relist window.
-7. After reclaim, lower the Host Job and measure resume. In the live test the client did not auto-resume within more than 79 seconds and required the controlled client's **Start** action. Record this as a failed automatic-resume threshold even when guarded Start recovers it.
-8. Separately start the exact pre-created owner on-demand test standby, measure platform pause/reclaim, stop it, and measure controlled-client resume with the same guarded Start fallback.
-9. Destroy the controlled client instance, clear its storage, and keep the host unlisted while reviewing the evidence. If reliability changes during failed-container and reclaim events, preserve both timelines and make no rating-safety claim because the causes are confounded.
+6. The clean live attempts relisted under the same guarded full-GPU terms and raised the Host Job to `$1.10/GPU-hour` for 30 seconds, `$1.30/GPU-hour` for 90 seconds, and `$3.00/GPU-hour` for 120 seconds. None preempted the controlled renter. An earlier mixed sequence appeared to fan out two one-GPU owner records and pause the renter, but it included a malformed owner launch and other confounding state changes; do not use it as proof of a supported handoff.
+7. End the Host Job test after its bounded timeout. Do not keep raising its price in search of an undocumented threshold.
+8. Separately start the exact pre-created owner on-demand test standby. The final diagnostic reached clean owner running and safely stopped the controlled interruptible in 82.281 seconds. Stop the exact owner, then measure controlled-client return; the same renter returned automatically and no guarded Start was used.
+9. Destroy the controlled client instance only after unlisting and exact absence proofs, retain or remove the standby according to its explicit cleanup authorization, and keep the host unlisted while reviewing the evidence. The final cleanup left no contracts or offers.
 
 There remains a short race between listing and controlled acquisition because Vast exposes no documented private or account-allowlisted offer. Abort and honor the contract if any unexpected client wins first. On a sliced multi-GPU test, fill every exposed slice from controlled client accounts before unlisting; never leave an advertised GPU available to an unknown client.
+
+Observed acquisition pitfalls:
+
+- A standby-preparation listing with `10/10` host price inputs returned HTTP 422. The previously accepted `price_gpu=5.84` and `price_min_bid=3` preparation shape was used instead, then every live offer field was re-read. Treat accepted numeric ranges as API behavior to verify, not a documented limit.
+- Creating the own-machine standby with `--cancel-unavail` returned the false-ownership error even though the authenticated account owned the exact offer. Only while vacant, prove that the failed response created no instance, then retry once without `--cancel-unavail`; never automate this retry during a rental.
+- The acquisition preflight normally rejects every host-account target-machine instance. When a pre-created standby exists, allow exactly one configured ID and label only after proving exact machine, `is_bid=false`, full GPU count, and the safe stopped tuple. Any extra or malformed target record still aborts. This exact standby allowance prevents the safety check from rejecting the intended preparation without weakening it for unknown instances.
+- Bid and on-demand search views can appear and disappear independently while a listing propagates. Prove both exact offer types once, then require the exact bid offer to remain continuously stable for at least 30 seconds immediately before the single create call. Reset the stability clock on any empty or mismatched response.
+- A published fixed-end ask can still return structured HTTP 400 `no_such_ask` at create time. Treat that response as a definite no-contract result, unlist, and reconcile both account inventories; do not retry the non-idempotent create blindly.
+- The two-hour-plus fixed ask became searchable but produced `no_such_ask`. Twelve-hour asks were launchable. Vast publishes no minimum offer horizon or propagation SLA, so do not encode the observed boundary as a platform rule.
+- When the controlled renter became active, the exact bid view's `min_bid` reflected its active bid rather than the original listing floor. Capture both values and do not fail cleanup or cycle preflight merely because that live field moved from the floor to the accepted bid.
+- `vol_size=0` disables the separate volume offer; it does not cap an instance disk or the total Docker pool. Specify the controlled disk explicitly (10 GB in this trial) and enforce a separate physical XFS Docker boundary.
+- Ordinary self-test requires the machine to be listed and vacant. Verification additionally requires reliability above 90% and 500 Mbps symmetric networking. `--ignore-requirements` is diagnostic only. This can make strict self-test unavailable to a fresh low-reliability host; it is not a reason to keep restarting or relisting it.
+- Avoid reboots and public-IP changes after registration. Vast tells unverified hosts to maintain steady uptime and avoid unnecessary reboots, and says lost connectivity can reduce reliability. The trial's score drop occurred during a restart/new-client sequence, so treat restart as a production gate event rather than routine setup.
 
 Follow the complete schedule, metrics, aborts, pass thresholds, delayed rating checks, and four-GPU adaptation in [`CONTROLLED-2H-2XA100-TRIAL.md`](CONTROLLED-2H-2XA100-TRIAL.md).
 
 After the exact controlled client is running and two consecutive searches prove the host unlisted, use [`CLEAN-HOSTJOB-CYCLE.md`](CLEAN-HOSTJOB-CYCLE.md) for the corrected Host Job-only rerun. Do not hand-transcribe that sequence: the controller compares the two authenticated account IDs, rejects unexpected existing Host Jobs, verifies the machine and client both represent exactly two GPUs, requires a digest-pinned reviewed image, and records strict mutation postconditions.
 
-## Safe owner reclaim
+## Owner-workload experiments — production reclaim blocked
 
 ### Owner-workload policy status
 
-Vast's Verification Stages guide says hosts must run their own workloads through Host **Jobs**. The current CLI command is `set defjob`; the console calls this Create Job. A Host Job is a persistent low-priority background bid. It does not have an owner-only priority class:
+Vast's Verification Stages guide says hosts must run workloads through the Jobs tab or `create job` CLI path. The current host CLI command `set defjob` creates a background job and accepts a per-GPU price. Neither that page nor the `set defjob` reference defines the price as a renter-preemption control. The following is the hypothesis that failed in the clean two-A100 attempts:
 
 ```text
 controlled interruptible bid B running
         │
-        │ set Host Job value above B
+        │ raise Host Job value (experimental)
         ▼
-controlled interruptible paused; Host Job should run
+expected: controlled interruptible pauses; observed: renter kept running
         │
         │ lower Host Job value below B
         ▼
-controlled interruptible resumes if it again has priority
+resume phase is reachable only after a clean displacement
 ```
 
 Create or update the job with the image and value already reviewed for that exact machine:
@@ -462,15 +550,17 @@ For the clean qualification cycle, refuse to overwrite an unexpected existing Ho
 
 Use a reviewed CUDA image pinned by registry digest and a bounded owner command. The clean controller accepts only the reviewed `pytorch/pytorch` CUDA image form, makes no package-install or unrelated network calls, checks exactly one visible GPU per fanned-out job, performs synchronized finite matrix multiplications for at most three minutes, and preserves both job logs. Do not use a miner, GPU-burn package, open-ended stress loop, or an argument string that swallows errors. Run the exact owner definition while vacant before depending on it for reclaim; a malformed owner launch makes both scheduler and rating observations inconclusive.
 
-The Host Job API has no GPU-count parameter. Do not assume one job on a multi-GPU machine gets one GPU or every GPU. The two-A100 run produced two one-GPU Host Job records, but that fan-out is not guaranteed on other topologies. It also found that Host Jobs scheduled only after the machine was relisted. The two-hour trial must measure `CUDA_VISIBLE_DEVICES` and `nvidia-smi -L`, and must abort on overlapping assignment.
+The Host Job API has no GPU-count parameter. Do not assume one job on a multi-GPU machine gets one GPU or every GPU. An earlier mixed run produced two one-GPU Host Job records, but the clean attempts did not reach owner execution. Fan-out, scheduling, and preemption are not guaranteed on other topologies or even repeatable on this one.
 
-The observed high/low values were asymmetric with the client's whole-machine bid: host `$1.30/GPU-hour` became renter-side `dph_base=$1.733333` on each one-GPU Host Job and preempted a two-GPU client bidding `$1.61/machine-hour`; host `$0.65/GPU-hour` became `$0.866667` per job and did not. Do not encode those observations as a general comparison formula. After lowering the owner jobs, the client remained stopped for more than 79 seconds and needed client **Start**. Until a repeat proves otherwise, the release controller must detect this state, fail the automatic-resume target, and use only the exact controlled client's guarded Start action.
+Do not encode a Host Job-versus-renter price formula. In the clean attempts, values far above the controlled renter's bid still did nothing within 30, 90, and 120 seconds. The official docs publish no threshold or latency. Price can express the background job's value without granting it an owner-only priority class.
 
-Host Jobs cannot preempt outside on-demand or reserved rentals. They can only win over lower interruptible bids. Vast does not promise zero rating impact for an operator-triggered bid change, so keep the same immediate and delayed rating checks. The live run recorded a reliability decrease during a cycle that also contained a failed container launch; that confounding prevents attribution and supports no rating-safety claim.
+Vast documents on-demand/reserved as the high-priority instance types and client interruptibles as a bid-ranked low-priority class. It does not document Host Jobs as a way to evict any rental type. The full trial's reliability moved from 0.5999925 (briefly 0.599997) to 0.5727243 during the restart/new-client sequence before the clean attempts. The three clean failed attempts stayed at 0.5727243 immediately. The later successful on-demand standby handoff was also 0.5727243 before, immediately after, and after cleanup; this is limited immediate evidence, not a production rating pass, because the score was already below the original baseline and the delayed checkpoint was unavailable.
 
 ### Experimental on-demand reclaim
 
 Vast separately documents a free own-machine on-demand instance for testing. It has stronger deterministic priority than a Host Job because on-demand outranks every interruptible bid. The following pre-created standby workflow is therefore retained for the controlled reclaim experiment and tooling validation. Do not present it as the approved ongoing owner-workload policy until Vast confirms that use in writing.
+
+This is the only current candidate for a scheduler-native 15-minute Sqwish start without permanently reserving a GPU. One diagnostic cycle reached owner running in 82.281 seconds, paused the interruptible safely, and returned it automatically after owner stop. Its acceptance timer begins when the research scheduler requests capacity and ends only when the exact owner instance and workload are ready, not when the API accepts `start`. Production qualification still requires at least two repeated cycles within 15 minutes and every immediate and delayed reliability observation at or above the machine's immutable original baseline. The host guide also says client and host accounts should be separate while calling the own-machine test instance free; obtain Vast's written clarification on the supported account topology, retained-disk or marketplace charges, and personal research workloads versus the Jobs requirement.
 
 ### What platform preemption means
 
@@ -518,6 +608,26 @@ The official CLI only shows the current account's instances. A host operator mus
 
 A same-account interruptible instance is not a valid substitute for the client side of this test. In the controlled September 2026 trial, Vast rejected an owner on-demand create on the same offer while that account's interruptible instance occupied the GPU with HTTP 400, error 3763 (`GPU conflict`). Use the separately authenticated, operator-controlled client account described above. It exercises a distinct client contract without accepting an unknown workload.
 
+### Measured owner-standby golden path
+
+This is the shortest path that completed the technical handoff. It remains a qualification procedure:
+
+1. While vacant, capture and permanently pin the machine's original reliability. Never replace it with a lower run-local baseline. Refuse mutations below it unless the operator explicitly selects the already-degraded disposable-host diagnostic override; that override can never establish production readiness.
+2. List briefly for standby preparation with the exact full-machine on-demand shape. A `10/10` input pair returned HTTP 422 in the pilot; the known accepted `price_gpu=5.84`, `price_min_bid=3`, zero-reserved-discount shape worked. Re-query rather than assuming those values will remain accepted.
+3. Create one exact own-machine on-demand instance with a dedicated label and minimal reviewed disk. If `--cancel-unavail` returns the observed false-ownership error, prove no instance exists, then retry once without that flag while the machine is still vacant.
+4. Start the standby once while vacant, prove the expected GPUs, stop it, and require `actual_status=created|exited|stopped`, `intended_status=stopped`, and `cur_state=stopped`. Record its exact ID, label, machine, mode, GPU count, disk, image, and offer privately.
+5. Sample current comparable interruptible offers. The successful snapshot used 17 records: renter whole-pair P10 `$0.7466667/hour`, host floor `$0.28/GPU-hour`, outside on-demand `$5.84/GPU-hour` host-side (`$15.5733/hour` renter pair), and reserved discount zero.
+6. Open one bounded public acquisition window with `min_chunk=2`, `vol_size=0`, a fixed end, and a 10 GB controlled-client disk. Configure acquisition to allow only the exact safely stopped owner standby; every other target-machine host record aborts.
+7. From the separately authenticated controlled-client account, issue one exact-machine interruptible create. Prove its ID, label, machine, bid type, two-GPU allocation, and `running/running/running` state. Unlist immediately and require three clean bid/on-demand absence samples.
+8. Run `tools/controlled_owner_standby_cycle.py` without `--apply`. It must prove distinct accounts, the exact two-instance inventories, clean machine health/reports, the immutable baseline gate, exact standby stopped state, exact renter running state, and no outside on-demand/reserved contract. Inspect the private plan.
+9. Apply interactively. The controller unlists again as its first mutation, re-proves absence, re-checks reliability and inventories, then starts only the exact owner standby. It never stops Vast, Docker, a service, or a renter container.
+10. Count the research-start SLO from the decision before unlisting until exact owner `running/running/running` with the controlled interruptible safely stopped. The pilot took **82.281 seconds**, within the 15-minute target.
+11. Stop and retain the exact owner standby. Require the full safe-stopped tuple, then observe the exact controlled renter. The pilot renter returned automatically; the evidence-gated fallback Start was not used.
+12. Capture immediate reliability, unlist again, prove absence, destroy only the explicitly authorized controlled renter, prove final no-contract/no-offer state, and capture post-cleanup reliability. The pilot stayed at `0.5727243` at both checkpoints, below original `0.5999925`. Its delayed check was skipped at the disposable host's preconfigured automatic-deletion deadline, so the rating gate failed.
+13. After controlled cleanup, the retained owner standby passed a real two-GPU PyTorch CUDA probe. Record that as workload-path evidence separate from the handoff timing, then stop the standby again.
+
+Repeat at least two clean cycles on the dedicated box, with immediate and delayed scores at or above the immutable original baseline, before considering this operational. Written Vast clarification on ongoing personal research workloads versus the required Jobs path remains a separate gate.
+
 ### Prepare the reusable owner standby while vacant
 
 Do this once before accepting outside rentals, or when intentionally replacing the standby. The host must be vacant and the exact on-demand offer reviewed:
@@ -528,14 +638,14 @@ vastai create instance <OWN_ON_DEMAND_OFFER_ID> \
   --disk <OWNER_DISK_GB> \
   --ssh --direct \
   --label owned-reclaim-standby \
-  --cancel-unavail --raw
+  --raw
 
 vastai show instance <OWN_INSTANCE_ID> --raw
 vastai stop instance <OWN_INSTANCE_ID> --raw
 vastai show instance <OWN_INSTANCE_ID> --raw
 ```
 
-Do not pass `--bid_price`. Persist required owner data, then stop the exact instance. Do not trust the start/stop command's text or exit code as proof: Vast CLI 1.5.6 prints human output under `--raw` and can exit zero for unsuccessful responses. A live safely stopped instance that never fully started reported `actual_status=created`, `intended_status=stopped`, and `cur_state=stopped`; a normally stopped instance may report `actual_status=exited`. Poll `show instance` until the exact record satisfies the explicit stopped-state proof above. Also record the exact ID, machine ID, label, `is_bid=false`, GPU count, offer ID when present, disk size, image, end date, and all three raw state fields in private operations records.
+Do not pass `--bid_price`. The vacant-host preparation omits `--cancel-unavail` because that flag produced a false-ownership response on the exact own-machine offer; if testing the flag again, prove its failed response created nothing before one vacant-only retry. Persist required owner data, then stop the exact instance. Do not trust the start/stop command's text or exit code as proof: Vast CLI 1.5.6 prints human output under `--raw` and can exit zero for unsuccessful responses. A live safely stopped instance that never fully started reported `actual_status=created`, `intended_status=stopped`, and `cur_state=stopped`; a normally stopped instance may report `actual_status=exited`. Poll `show instance` until the exact record satisfies the explicit stopped-state proof above. Also record the exact ID, machine ID, label, `is_bid=false`, GPU count, offer ID when present, disk size, image, end date, and all three raw state fields in private operations records.
 
 Set these values in the private `.env`:
 
@@ -558,13 +668,13 @@ Preview, review Host Machines/Contracts, then apply:
 ./scripts/reclaim-gpu.sh --contracts-reviewed --apply
 ```
 
-Apply asks for `START <INSTANCE_ID> ON <MACHINE_ID>`, repeats the exact stopped-instance proof under its lock, persists `mode: precreated` and `status: start-pending`, then starts only that ID. It polls for up to 30 seconds. Success requires the same exact record to report all three status fields as `running`. An uncertain or stuck start retains active state; run the guarded release to stop/cancel that exact attempt. Never create a replacement while a tenant is active.
+Apply asks for `START <INSTANCE_ID> ON <MACHINE_ID>`, repeats the exact stopped-instance proof under its lock, persists `mode: precreated` and `status: start-pending`, then starts only that ID. The basic shell helper polls for 30 seconds; the controlled standby controller measures the full configurable SLO up to 15 minutes and observed 82.281 seconds. Success requires the same exact record to report all three status fields as `running`. An uncertain or stuck start retains active state; run the guarded release to stop/cancel that exact attempt. Never create a replacement while a tenant is active.
 
-Vast documents that scheduling beyond roughly 30 seconds usually means the GPU is unavailable. A stopped standby protects disk allocation but has no GPU reservation. Addresses and ports can change after restart, so obtain fresh connection details after running is confirmed.
+A stopped standby protects disk allocation but has no GPU reservation. The measured takeover needed more than 30 seconds, so use the explicit 15-minute research SLO rather than treating the shell helper's short poll as a scheduler failure. Addresses and ports can change after restart, so obtain fresh connection details after running is confirmed.
 
 ### Fresh create fallback
 
-Leave `VAST_OWN_INSTANCE_ID` blank only when deliberately accepting a fresh disk allocation at reclaim time. The helper then previews this flow:
+Leave `VAST_OWN_INSTANCE_ID` blank only when deliberately accepting a fresh disk allocation at reclaim time. Set `VAST_OWN_IMAGE` to the reviewed `pytorch/pytorch` CUDA `tag@sha256` value resolved above; the helper rejects an empty value, a mutable tag, another registry/repository, and a non-CUDA image. It then previews this flow:
 
 ```bash
 vastai search offers 'machine_id=<MACHINE_ID> verified=any' --type on-demand --raw
@@ -600,12 +710,12 @@ For `fresh-created`, release asks for `RELEASE <INSTANCE_ID>` and uses guarded d
 
 ```bash
 vastai show instance <OWN_INSTANCE_ID> --raw
-vastai destroy instance <OWN_INSTANCE_ID> --raw
+vastai destroy instance <OWN_INSTANCE_ID> --yes --raw
 ```
 
-Before running destroy, match all three: instance ID, machine ID, and owner label. Destroy is irreversible. The Vast CLI 1.5.6 destroy command does not accept `--yes`; `release-gpu.sh` obtains a stronger typed confirmation before invoking it. Never select an ID from host-side Docker output.
+Before running destroy, match all three: instance ID, machine ID, and owner label. Destroy is irreversible. Vast CLI 1.5.6 prompts for confirmation unless `--yes` is supplied; the helpers first obtain a stronger typed confirmation, then pass `--yes` so their captured-output subprocess cannot block on an invisible prompt. Never select an ID from host-side Docker output.
 
-Vast CLI 1.5.6 can destroy successfully yet emit no JSON from `destroy instance ... --raw`; the command wrapper does not always forward the underlying response. The helper accepts either an explicit JSON `"success": true` or a strict postcondition: `show instance <ID> --raw` must return the absent sentinel (`{"instances": null}`), and `show instances --raw` must use a recognized list shape with no matching ID. If those two checks do not agree after bounded retries, it retains active state and reports failure.
+Vast CLI 1.5.6 can destroy successfully yet emit no JSON from `destroy instance ... --yes --raw`; the command wrapper does not always forward the underlying response. The helper accepts either an explicit JSON `"success": true` or a strict postcondition: `show instance <ID> --raw` must return the absent sentinel (`{"instances": null}`), and `show instances --raw` must use a recognized list shape with no matching ID. If those two checks do not agree after bounded retries, it retains active state and reports failure.
 
 Recovery overrides require all of `--mode`, `--instance-id`, `--machine-id`, and `--expected-label`. This prevents a lost precreated state file from silently defaulting to destructive release.
 
@@ -671,7 +781,64 @@ For each reclaim test, keep a small change record:
 | After release | owner stop/destroy postcondition and time, bidder resume time, failed starts/errors, health |
 | Delayed check | reliability/verification after platform update, earnings interval, client status |
 
-Vast says losing host connection or a client instance failing to start lowers reliability. It does not publish a statement that intended scheduler preemption has zero rating impact. Treat unchanged reliability as something to measure, not assume.
+Vast says losing host connection or a client instance failing to start lowers reliability. It does not publish a statement that intended scheduler preemption has zero rating impact. In this trial the score moved from 0.5999925 (briefly 0.599997) to 0.5727243 during the restart/new-client sequence. It then stayed at 0.5727243 across the clean failed Host Job attempts and at the before/immediate/post-cleanup checkpoints of the successful owner-standby handoff. The latter is useful immediate evidence, but it remained below the immutable original baseline and lacked the delayed checkpoint.
+
+No local script can set or directly raise this platform score. Vast's
+[Verification Stages](https://docs.vast.ai/host/verification-stages#reliability)
+guide says a new machine starts low and grows as it remains online, with a
+stable machine typically reaching 90% within a few days. The operational way
+to improve it is steady uptime, clean client launches, healthy ports/network,
+and avoiding unnecessary restarts or configuration churn.
+
+Before the clean qualification soak, enable the shared owner-workload HOLD:
+
+```bash
+python3 tools/verification_guard.py --enable-qualification-mode --machine-id "$VAST_MACHINE_ID"
+python3 tools/verification_guard.py --sample --machine-id "$VAST_MACHINE_ID"
+```
+
+The first command writes the HOLD before it contacts Vast, so a CLI, parsing,
+or inventory failure remains fail-closed. The observer is read-only: it records
+the platform score/state, reports, error fields, current owner inventory, the
+official prerequisites exposed in the machine record, and the reliability
+trend. It labels SSH policy, Secure Boot, server edition, physical-core mapping,
+dedicated SSD layout, root free space, VM support, sustained uptime, and hidden
+bottlenecks as manual checks when the API cannot prove them.
+
+While the marker is active, `prepare_owner_standby.py`,
+`controlled_owner_standby_cycle.py`, and `scripts/reclaim-gpu.sh` refuse the
+owner mutation before listing or starting anything. Use the same private
+`VAST_STATE_DIR` for every helper. Do not bypass the marker by changing the
+state directory.
+
+For the combined 24-hour pilot only, prepare one exact standby while the host
+is vacant, prove the full stopped tuple, and then enable the HOLD with
+`--allowed-owner-standby INSTANCE_ID:LABEL`. The guard permits only that stopped
+record and still blocks its start. Because Vast does not state whether a
+stopped personal instance record affects verification, label this first arm a
+qualification-trend observation. A strict verification control has no owner
+instance and no takeover arm.
+
+Keep the host dedicated and free of private background workloads while it is
+qualifying. Controlled Vast rental workloads may exercise it, but owner work
+must follow Vast's Jobs/Create Job guidance. Run the ordinary Self-Test once
+while the machine is vacant, then preserve steady uptime and configuration.
+`--ignore-requirements` remains a diagnostic pressure test only. Vast's current
+minimum is reliability **strictly over 90%**, 500 Mbps symmetric networking,
+and the other requirements in the linked guide; eligibility does not guarantee
+immediate verification.
+
+When deliberately ending the clean soak, use:
+
+```bash
+python3 tools/verification_guard.py --disable-qualification-mode --machine-id "$VAST_MACHINE_ID"
+```
+
+This archives the mode transition and removes the local block. It does not make
+the owner on-demand standby part of the Jobs framework or certify it as
+verification-safe. Follow
+[`CONTROLLED-24H-VERIFICATION-AND-HANDOFF-PILOT.md`](CONTROLLED-24H-VERIFICATION-AND-HANDOFF-PILOT.md)
+to keep the clean soak and research-first handoffs separate.
 
 ## Maintenance and notice
 
@@ -720,7 +887,7 @@ For a token trial, report gross rental earnings, utilization hours, power consum
 For a controlled cycle, cleanup is ordered and fail-closed even after an exception, Ctrl-C, or termination signal:
 
 1. Unlist first and require three consecutive exact-machine samples with both on-demand and bid offers absent. A preflight absence sample taken before the first mutation cannot authorize later destruction.
-2. Remove only the Host Job definition created by the cycle, then prove its machine fields and every recorded owner bid ID absent. If an unexpected Host Job existed before the cycle, preflight should have aborted rather than overwriting it.
+2. Only after step 1 succeeds, remove the Host Job definition created by the cycle, then prove its machine fields and every recorded owner bid ID absent. If step 1 fails, retain the owner jobs, treat capacity state as unresolved, and reconcile the listing immediately. If an unexpected Host Job existed before the cycle, preflight should have aborted rather than overwriting it.
 3. Destroy the controlled client only if a state-changing cycle began, the post-mutation unlist proof passed, and both the single-instance and full-list views still prove the exact ID, machine, label, bid type, and GPU count. Require explicit JSON success or exact absence from both views. If unlisting or identity proof is uncertain, retain the client and state for manual reconciliation.
 4. Capture immediate and post-cleanup reliability, verification, reports, and machine-error fields. Keep the result provisional until the mandatory delayed observation finishes.
 5. Reconcile ended storage only after no active or paused contract or rented volume remains.
@@ -785,16 +952,19 @@ Do not format or repurpose the client-storage disk until the unlist/contract/vol
 | Self-test fails ports | Range not reachable end-to-end, TCP/UDP mismatch, CGNAT, or too few ports | Fix router and host firewall; test externally; provide at least five/GPU (100/GPU recommended). |
 | Machine does not appear in normal search | Search results show only a subset | Use `vastai search offers 'machine_id=<MACHINE_ID> verified=any'`. |
 | On-demand outside rental appears | High price discouraged but did not prohibit it | Abort owner reclaim and honor the contract through its end date. Current docs have no strict interruptible-only switch. |
+| Standby-preparation listing returns HTTP 422 for `10/10` price inputs | The API rejected that numeric listing shape even though the CLI accepted the command syntax | Keep the host vacant/unlisted, inspect the response body, and use a previously live-accepted bounded preparation shape such as `5.84/3` only after revalidating every postcondition. Do not infer a universal price limit. |
+| Own-machine standby create with `--cancel-unavail` claims the offer is not owned | Observed false-ownership bug on exact host-owned offers | Prove the failed call created no instance. Only while vacant, retry once without `--cancel-unavail`; never apply this retry pattern during a rental. |
 | Owner on-demand create returns HTTP 400 / error 3763 `GPU conflict` during a same-account self-bid test | Vast will not use that account's on-demand instance to preempt its own interruptible instance on the occupied GPU | Destroy only the same-account test instance through its verified ID if one exists. Mark the trial invalid, then repeat only through the documented separate controlled client account; do not accept an unknown renter or alter renter containers/host services. |
 | Precreated reclaim refuses to start | Exact ID/machine/label/on-demand/GPU/offer check failed, the record did not report `actual_status=created|exited|stopped` with `intended_status=stopped` and `cur_state=stopped`, or the standby expired | Do not clear the ID or fall back to create while rented. Resolve the exact mismatch; replace the standby only while safely vacant. |
 | `start instance` or `stop instance` prints success-like text but state does not change | CLI 1.5.6 does not provide authoritative machine-readable start/stop results, or scheduling/stop is delayed | Trust only bounded polling of the exact `show instance` record. A start requires `running/running/running`; a stop requires the explicit non-running actual-state allowlist plus both stopped control fields. Run guarded release to stop a stuck start and retain state if the appropriate proof fails. |
 | Bid renter remains running after owner create | Wrong offer/machine, owner creation stopped, or scheduler did not allocate it | Do not touch renter. Inspect owner create result/status and machine contracts; destroy only a failed owner instance and investigate. |
-| Destroy exits successfully but prints no JSON with `--raw` | CLI 1.5.6 may not forward the destroy response from its command wrapper | Verify the exact ID returns `{"instances": null}` from `show instance` and is absent from `show instances`. `release-gpu.sh` performs both checks and keeps active state unless both prove absence. Do not add the unsupported `--yes` flag. |
+| Destroy exits successfully but prints no JSON with `--raw` | CLI 1.5.6 may not forward the destroy response from its command wrapper | Pass `--yes` after the helper's typed confirmation so the command cannot wait on an invisible prompt. Then verify the exact ID returns `{"instances": null}` from `show instance` and is absent from `show instances`. `release-gpu.sh` performs both checks and keeps active state unless both prove absence. |
 | Bid renter does not resume after owner release | Priority/bid changed, reusable owner does not satisfy the safe stopped-state proof, fresh owner still exists, scheduler delay, or client state issue | Confirm the owner-release postcondition and machine/daemon health. In a controlled test, record and fsync the automatic-return failure before the separate client account issues one guarded Start of the same exact instance; this still fails the gate. A host cannot do that for a public renter. Never start or kill a renter container from the host. |
-| Host Jobs remain inert while the machine is unlisted | Observed scheduler behavior requires an active listing before Host Jobs schedule | Only in a controlled test, use the fixed-end guarded relist and continuously reconcile contracts. Abort on an unexpected contract. Keep public production reclaim disabled until this exposure is accepted and re-proved on the dedicated box. |
+| Acquisition refuses because the intentionally pre-created owner standby exists | General no-host-instance guard was used without the exact standby allowance | Configure exactly one allowed standby ID and label, then prove same machine, `is_bid=false`, full GPU count, and safe stopped tuple. Any extra target record remains an abort. |
+| Host Jobs do not preempt the controlled interruptible | Host Jobs are background jobs; the official docs do not define their price as a preemption lever | End the bounded test, preserve exact snapshots, unlist, and clean up. Do not keep increasing price. Use explicit-release, drain, or reserved-capacity production modes. |
 | Owner jobs fail immediately or logs do not prove the expected GPUs/work | Image, `--args` ordering, CUDA compatibility, or workload error | Lower/remove only the recorded owner definition, unlist, preserve logs and rating snapshots, and do not retry while rented. Validate a digest-pinned bounded job while vacant before a new cycle. Treat that run's rating result as confounded. |
 | Listing or Host Job mutation exits zero but live fields do not match | Vast CLI command output is not an authoritative postcondition | Unlist when safe, retain controlled state, and fail the cycle. Continue only after the exact machine, every exact offer, and every exact owner record agree with the requested fields. |
-| Controlled cleanup cannot prove the host unlisted after a cycle began | API delay/error or wrong machine/context | Do not destroy the controlled client. Keep the fixed end as the backstop, preserve state, and reconcile the exact machine and both account contexts manually. |
+| Controlled cleanup cannot prove the host unlisted after a cycle began | API delay/error or wrong machine/context | Do not remove the owner Host Jobs or destroy the controlled client. Treat capacity state as unresolved; the retained jobs may be active or inactive, and the fixed end only limits new offers. Preserve state and reconcile the exact machine and both account contexts immediately. |
 | Machine or client GPU count is not exactly the planned full-machine count | Wrong shape, stale offer, slicing, or extra GPUs remain exposed | Unlist and abort. Never treat a partial controlled allocation as proof that unknown acquisition is impossible. |
 | Ordinary self-test refuses a new low-reliability machine | Verification requires reliability above its threshold | Keep the host stable and online until eligible. A relaxed self-test is diagnostic only and does not verify or qualify the machine. |
 | Cloud provider reports marketplace-tenant abuse | Third-party hosting was not approved or an unknown workload ran | Stop accepting contracts, preserve evidence, remove only the exact disposable hosting resources, and follow [`INCIDENT-CLOUD-MINER.md`](INCIDENT-CLOUD-MINER.md). Do not resume hosting on that provider without written approval. |
@@ -809,6 +979,7 @@ Do not format or repurpose the client-storage disk until the unlist/contract/vol
 - [How to self-test](https://docs.vast.ai/host/how-to-self-test)
 - [VM configuration](https://docs.vast.ai/host/vms)
 - [Instance types and interruptible priority/resume](https://docs.vast.ai/guides/instances/choosing/instance-types)
+- [`set defjob` background Host Job](https://docs.vast.ai/cli/reference/set-defjob)
 - [`list machine`](https://docs.vast.ai/cli/reference/list-machine)
 - [`set min-bid`](https://docs.vast.ai/cli/reference/set-min-bid)
 - [`unlist machine`](https://docs.vast.ai/cli/reference/unlist-machine)

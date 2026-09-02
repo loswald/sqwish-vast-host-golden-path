@@ -11,6 +11,7 @@ This directory contains sanitized API snapshots from a two-account Vast trial on
 - With the corrected definition, both owner containers ran and each completed `gpu_burn` successfully. Host Jobs were only observed to schedule while the machine had an active listing.
 - Lowering the owner jobs did **not** automatically resume the client during a wait of more than **79 seconds**. The client's ordinary Start action restored the same stored contract to `cur_state=running` in about **3.37 seconds**; both GPUs later returned to 100% utilization.
 - Reliability fell from **0.5999925** to **0.5727243** after the malformed owner launches and first reclaim. It remained at 0.5727243 after the corrected cycle. The failed launches confound attribution, so this test cannot establish rating-safe reclaim.
+- A later read-only qualification sample reported **0.5727207**, no machine errors or reports, **4200.4 Mbps download**, and only **161.9 Mbps upload**. The current verification minimum is 500 Mbps in both directions, so this disposable host was structurally unable to qualify. The tiny score drift is observational and cannot be attributed to the later clean handoff.
 - Direct client spend was **$0.10394347623**. The contract, temporary client API and SSH keys, Host Job, Vast machine record, and exact disposable cloud VM/disks/IP/firewall were removed.
 
 ## Evidence map
@@ -21,6 +22,7 @@ This directory contains sanitized API snapshots from a two-account Vast trial on
 - `resume-poll.json` records the lack of automatic resume and the manual Start transition.
 - `resume-confirmation.json` is a manually checked, sanitized observation from the later client and host telemetry that confirmed the same contract fully running and both GPUs at 100% utilization. The raw resume poll itself ends earlier, when scheduler state had changed but `actual_status` was still `exited`.
 - `baseline-market-p99.json` and `baseline-captured-at.txt` record the pre-test market and timestamp.
+- `late-verification-observation.json` records the final read-only score, network, error, and report assessment without machine or account identifiers.
 
 The bid-search response came from `search offers --type bid` but reported `is_bid: false`. Automation must trust the requested offer class plus exact machine/host/GPU checks and verify the created contract's `is_bid: true`; filtering the search response on `is_bid === true` caused two safe, failed-closed acquisition attempts.
 

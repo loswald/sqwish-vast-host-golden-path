@@ -12,6 +12,8 @@ required=(
   docs/TRIAL-NOTES.md
   docs/A100-2X-LIVE-TRIAL.md
   docs/CLEAN-HOSTJOB-CYCLE.md
+  docs/CONTROLLED-ACQUISITION.md
+  docs/CONTROLLED-24H-VERIFICATION-AND-HANDOFF-PILOT.md
   docs/SCAN-4X-RTX-PRO-6000-PILOT.md
   docs/ECONOMICS.md
   docs/ADAPTIVE-PRICING.md
@@ -31,7 +33,19 @@ required=(
   tools/usage_patterns.py
   tools/adaptive_pricing.py
   tools/controlled_hostjob_cycle.py
+  tools/controlled_acquisition.py
+  tools/controlled_owner_standby_cycle.py
+  tools/controlled_24h_pilot.py
+  tools/controlled_24h_cleanup.py
+  tools/prepare_owner_standby.py
+  tools/verification_guard.py
   tests/test_controlled_hostjob_cycle.py
+  tests/test_controlled_acquisition.py
+  tests/test_controlled_owner_standby_cycle.py
+  tests/test_controlled_24h_pilot.py
+  tests/test_controlled_24h_cleanup.py
+  tests/test_prepare_owner_standby.py
+  tests/test_verification_guard.py
   site/app/gpu-economics-lab.tsx
   site/package.json
   .env.example
@@ -48,11 +62,11 @@ for path in "${required[@]}"; do
 done
 
 if command -v python3 >/dev/null 2>&1; then
-  if python3 -m py_compile "${ROOT}/tools/economics_model.py" "${ROOT}/tools/usage_patterns.py" "${ROOT}/tools/adaptive_pricing.py" "${ROOT}/tools/controlled_hostjob_cycle.py" "${ROOT}/tests/test_controlled_hostjob_cycle.py" \
+  if python3 -m py_compile "${ROOT}/tools/economics_model.py" "${ROOT}/tools/usage_patterns.py" "${ROOT}/tools/adaptive_pricing.py" "${ROOT}/tools/controlled_hostjob_cycle.py" "${ROOT}/tools/controlled_acquisition.py" "${ROOT}/tools/controlled_owner_standby_cycle.py" "${ROOT}/tools/controlled_24h_pilot.py" "${ROOT}/tools/controlled_24h_cleanup.py" "${ROOT}/tools/prepare_owner_standby.py" "${ROOT}/tools/verification_guard.py" "${ROOT}/tests/test_controlled_hostjob_cycle.py" "${ROOT}/tests/test_controlled_acquisition.py" "${ROOT}/tests/test_controlled_owner_standby_cycle.py" "${ROOT}/tests/test_controlled_24h_pilot.py" "${ROOT}/tests/test_controlled_24h_cleanup.py" "${ROOT}/tests/test_prepare_owner_standby.py" "${ROOT}/tests/test_verification_guard.py" \
      && python3 "${ROOT}/tools/economics_model.py" >/dev/null \
      && python3 "${ROOT}/tools/usage_patterns.py" >/dev/null \
-     && (cd "${ROOT}" && python3 -m unittest discover -s tests -p 'test_controlled_hostjob_cycle.py'); then
-    printf 'PASS Python models and clean Host Job cycle tests\n'
+     && (cd "${ROOT}" && python3 -m unittest discover -s tests -p 'test_*.py'); then
+    printf 'PASS Python models, verification guard, controlled acquisition, owner standby, and clean Host Job cycle tests\n'
   else
     failed=1
   fi

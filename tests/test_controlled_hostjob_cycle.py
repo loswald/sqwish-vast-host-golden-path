@@ -21,14 +21,20 @@ from tools.controlled_hostjob_cycle import (
     authenticated_account_id,
     build_defjob_args,
     build_list_args,
+    build_production_readiness_result,
+    delayed_rating_skip_reason,
     exact_end_is_proved,
     ensure_client_not_configured_owner,
     full_list_is_explicitly_absent,
+    health_is_clear,
+    load_or_pin_original_reliability_baseline,
     machine_summary,
     mutation_explicitly_succeeded,
+    original_reliability_assessment,
     parse_reports_output,
     parse_workload_log,
     rating_gate_passes,
+    require_original_reliability_floor,
     require_client_identity,
     require_full_machine_capacity,
     require_no_default_job,
@@ -59,6 +65,7 @@ def config(**changes):
         expected_owner_low_renter_price=0.5333333333333333,
         expected_owner_high_renter_price=1.7333333333333334,
         owner_image="pytorch/pytorch:cuda@sha256:" + "a" * 64,
+        original_reliability_baseline=0.99,
         delayed_seconds=7200,
     )
     values.update(changes)
@@ -282,6 +289,16 @@ class LowGateCycle(PrelistStageFailureCycle):
         raise CycleError("synthetic low phase failure")
 
 
+class DegradedBaselineCycle(PrelistStageFailureCycle):
+    def query_machine(self):
+        return machine_record(
+            reliability2=0.98,
+            bid_image=None,
+            bid_image_args=[],
+            bid_gpu_cost=None,
+        )
+
+
 class MalformedOfferCycle(Cycle):
     def __init__(self, *args, malformed, **kwargs):
         super().__init__(*args, **kwargs)
@@ -369,7 +386,7 @@ class ControlledHostJobCycleTests(unittest.TestCase):
     def test_config_rejects_unsafe_time_bounds_and_zero_or_nonfinite_prices(self, _clock):
         validate_config(config())
         invalid = [
-            config(max_public_seconds=901),
+            config(max_public_seconds=601),
             config(max_public_seconds=0),
             config(delayed_seconds=0),
             config(delayed_seconds=7199),
@@ -382,6 +399,9 @@ class ControlledHostJobCycleTests(unittest.TestCase):
             config(host_job_high=float("-inf")),
             config(expected_owner_low_renter_price=0),
             config(expected_owner_low_renter_price=2.0, expected_owner_high_renter_price=1.0),
+            config(original_reliability_baseline=float("nan")),
+            config(original_reliability_baseline=-0.1),
+            config(original_reliability_baseline=1.1),
         ]
         for cfg in invalid:
             with self.subTest(cfg=cfg), self.assertRaises(CycleError):
@@ -536,6 +556,118 @@ class ControlledHostJobCycleTests(unittest.TestCase):
                 f"{cycle.cfg.host_job_low:.6f}",
             )
 
+    def test_degraded_run_local_baseline_refuses_every_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            host, client = FakeCli(), FakeCli()
+            cycle = DegradedBaselineCycle(
+                config(original_reliability_baseline=0.99),
+                host,
+                client,
+                Path(tmp),
+                sleep=lambda _seconds: None,
+            )
+
+            with self.assertRaisesRegex(CycleError, "below immutable original baseline"):
+                cycle.run()
+
+            mutations = [
+                call
+                for call in host.run_calls
+                if call[:2] in (["set", "defjob"], ["list", "machine"], ["remove", "defjob"])
+            ]
+            self.assertEqual(mutations, [])
+            gate = json.loads(
+                (Path(tmp) / "original-reliability-baseline-gate.json").read_text()
+            )
+            self.assertEqual(gate["original_reliability_baseline"], 0.99)
+            self.assertEqual(gate["observed_reliability"], 0.98)
+            self.assertFalse(gate["at_or_above_original"])
+
+    def test_original_baseline_is_pinned_once_and_cannot_be_rebased_downward(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = load_or_pin_original_reliability_baseline(
+                root,
+                config(original_reliability_baseline=0.99),
+            )
+            second = load_or_pin_original_reliability_baseline(
+                root,
+                config(original_reliability_baseline=0.99),
+            )
+
+            self.assertEqual(first, second)
+            self.assertEqual(first["original_reliability_baseline"], 0.99)
+            with self.assertRaisesRegex(CycleError, "already-pinned immutable value"):
+                load_or_pin_original_reliability_baseline(
+                    root,
+                    config(original_reliability_baseline=0.98),
+                )
+
+            stored = json.loads(
+                (
+                    root
+                    / "original-reliability-baselines"
+                    / f"machine-{config().machine_id}.json"
+                ).read_text()
+            )
+            self.assertEqual(stored["original_reliability_baseline"], 0.99)
+
+    def test_takeover_is_recorded_only_as_an_experimental_observation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cycle = Cycle(
+                config(reclaim_timeout=1),
+                FakeCli(),
+                FakeCli(),
+                Path(tmp),
+                sleep=lambda _seconds: None,
+                monotonic=lambda: 0,
+            )
+            cycle.snapshot = lambda _phase: {
+                "client_instance": client_record(),
+                "host_instances": [owner_job(6001), owner_job(6002)],
+            }
+
+            cycle.wait_for_experimental_takeover()
+
+            self.assertTrue(cycle.experimental_takeover_observed)
+            evidence = json.loads(
+                (Path(tmp) / "experimental-takeover-observed.json").read_text()
+            )
+            self.assertTrue(evidence["observed"])
+            self.assertIn("experimental scheduler-transition", evidence["scope"])
+            self.assertIn("does not prove", evidence["scope"])
+            self.assertFalse((Path(tmp) / "reclaim-confirmed.json").exists())
+
+    def test_delayed_wait_is_skipped_after_failed_takeover_or_known_rating_loss(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cycle = Cycle(config(), FakeCli(), FakeCli(), Path(tmp))
+            cycle.post_cleanup = machine_summary(machine_record(), [])
+            self.assertIn("not observed", delayed_rating_skip_reason(cycle))
+
+            cycle.experimental_takeover_observed = True
+            cycle.post_cleanup = machine_summary(machine_record(reliability2=0.98), [])
+            self.assertIn("below", delayed_rating_skip_reason(cycle))
+
+            cycle.post_cleanup = machine_summary(machine_record(reliability2=0.995), [])
+            self.assertIsNone(delayed_rating_skip_reason(cycle))
+
+    def test_production_readiness_is_never_established_by_one_takeover_cycle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cycle = Cycle(config(), FakeCli(), FakeCli(), Path(tmp))
+            cycle.experimental_cycle_completed = True
+            cycle.experimental_takeover_observed = True
+            cycle.auto_resume = True
+
+            readiness = build_production_readiness_result(cycle, None, rating_gate=True)
+
+            self.assertTrue(readiness["single_cycle_technical_gates_passed"])
+            self.assertFalse(readiness["established"])
+            self.assertEqual(readiness["status"], "not-established-by-this-experiment")
+            self.assertIn("original_reliability_baseline", readiness)
+            self.assertTrue(
+                any("cannot establish" in reason for reason in readiness["blocking_reasons"])
+            )
+
     def test_failed_post_cycle_unlist_keeps_controlled_client_intact(self):
         with tempfile.TemporaryDirectory() as tmp:
             host, client = FakeCli(), FakeCli()
@@ -547,6 +679,103 @@ class ControlledHostJobCycleTests(unittest.TestCase):
             self.assertIn(["unlist", "machine", "9001"], host.run_calls)
             self.assertEqual(client.run_calls, [])
             self.assertFalse(cycle.unlisted_proved)
+
+    def test_failed_unlist_retains_high_owner_jobs_while_client_is_stopped(self):
+        class ThirdSampleListingFailureCycle(Cycle):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.offer_queries = 0
+
+            def query_offers(self, offer_type):
+                self.offer_queries += 1
+                if self.offer_queries == 5 and offer_type == "bid":
+                    return [{"id": 8101, "machine_id": int(self.cfg.machine_id)}]
+                return []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            host, client = FakeCli(), FakeCli()
+            high_owner_jobs = [
+                owner_job(
+                    job_id,
+                    actual_status="running",
+                    intended_status="running",
+                    cur_state="running",
+                    dph_base=config().expected_owner_high_renter_price,
+                )
+                for job_id in (6001, 6002)
+            ]
+            host.json_handler = lambda args, _check=True: (
+                high_owner_jobs if args[:2] == ["show", "instances"] else []
+            )
+            client.json_handler = lambda args, _check=True: (
+                client_record() if args[:2] == ["show", "instance"] else [client_record()]
+            )
+            cycle = ThirdSampleListingFailureCycle(
+                config(), host, client, Path(tmp), sleep=lambda _seconds: None
+            )
+            cycle.destroy_authorized = True
+            cycle.cycle_started = True
+            cycle.defjob_touched = True
+            cycle.owner_job_ids = ("6001", "6002")
+            self.assertEqual(len(cycle.active_owner_jobs(high_owner_jobs)), 2)
+
+            cycle.cleanup()
+
+            self.assertIn(["unlist", "machine", "9001"], host.run_calls)
+            self.assertNotIn(["remove", "defjob", "9001"], host.run_calls)
+            self.assertEqual(client.run_calls, [])
+            self.assertEqual(cycle.offer_queries, 5)
+            self.assertFalse(cycle.unlisted_proved)
+            self.assertTrue(
+                any("capacity state remains unresolved" in error for error in cycle.cleanup_errors)
+            )
+
+    def test_failed_unlist_command_also_retains_inactive_low_owner_jobs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            host, client = FakeCli(), FakeCli()
+            low_owner_jobs = [
+                owner_job(
+                    job_id,
+                    actual_status="loading",
+                    intended_status="stopped",
+                    cur_state="unloaded",
+                    dph_base=config().expected_owner_low_renter_price,
+                )
+                for job_id in (6001, 6002)
+            ]
+            host.json_handler = lambda args, _check=True: (
+                low_owner_jobs if args[:2] == ["show", "instances"] else []
+            )
+            client.json_handler = lambda args, _check=True: (
+                client_record() if args[:2] == ["show", "instance"] else [client_record()]
+            )
+            original_run = host.run
+
+            def fail_unlist(args, **kwargs):
+                if args[:2] == ["unlist", "machine"]:
+                    host.run_calls.append(args)
+                    raise CycleError("synthetic unlist command failure")
+                return original_run(args, **kwargs)
+
+            host.run = fail_unlist
+            cycle = Cycle(config(), host, client, Path(tmp))
+            cycle.destroy_authorized = True
+            cycle.cycle_started = True
+            cycle.defjob_touched = True
+            cycle.owner_job_ids = ("6001", "6002")
+            self.assertTrue(cycle.owner_jobs_inactive_at_low(low_owner_jobs))
+
+            cycle.cleanup()
+
+            self.assertIn(["unlist", "machine", "9001"], host.run_calls)
+            self.assertNotIn(["remove", "defjob", "9001"], host.run_calls)
+            self.assertEqual(client.run_calls, [])
+            self.assertTrue(
+                any("synthetic unlist command failure" in error for error in cycle.cleanup_errors)
+            )
+            self.assertTrue(
+                any("capacity state remains unresolved" in error for error in cycle.cleanup_errors)
+            )
 
     def test_failed_defjob_removal_keeps_controlled_client_intact(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -570,7 +799,7 @@ class ControlledHostJobCycleTests(unittest.TestCase):
             self.assertEqual(client.run_calls, [])
             self.assertTrue(any("earlier cleanup" in error for error in cycle.cleanup_errors))
 
-    def test_destroy_has_no_invalid_yes_and_requires_success_or_two_absence_views(self):
+    def test_destroy_is_noninteractive_and_requires_success_or_two_absence_views(self):
         self.assertTrue(mutation_explicitly_succeeded('{"success": true}'))
         self.assertFalse(mutation_explicitly_succeeded("destroying"))
         self.assertTrue(single_instance_is_explicitly_absent({"instances": None}, "7001"))
@@ -588,8 +817,7 @@ class ControlledHostJobCycleTests(unittest.TestCase):
             cycle.unlisted_proved = True
             cycle.cleanup()
             destroy = next(call for call in client.run_calls if call[:2] == ["destroy", "instance"])
-            self.assertEqual(destroy, ["destroy", "instance", "7001", "--raw"])
-            self.assertNotIn("--yes", destroy)
+            self.assertEqual(destroy, ["destroy", "instance", "7001", "--yes", "--raw"])
             self.assertTrue((Path(tmp) / "destroy-verification.json").is_file())
         with tempfile.TemporaryDirectory() as tmp:
             host, client = FakeCli(), FakeCli()
@@ -732,11 +960,20 @@ class ControlledHostJobCycleTests(unittest.TestCase):
 
     def test_machine_health_fields_are_mandatory_and_post_cleanup_is_in_rating_gate(self):
         summary = machine_summary(machine_record(num_reports=None, num_recent_reports=None), [])
-        self.assertTrue(rating_gate_passes(summary, dict(summary), dict(summary), dict(summary)))
+        assessment = original_reliability_assessment(0.98, summary)
+        self.assertTrue(assessment["at_or_above_original"])
+        self.assertGreater(assessment["delta_from_original"], 0)
+        require_original_reliability_floor(0.98, summary, "test")
+        with self.assertRaisesRegex(CycleError, "immutable original"):
+            require_original_reliability_floor(1.0, summary, "test")
+        self.assertTrue(rating_gate_passes(0.99, summary, dict(summary), dict(summary), dict(summary)))
+        improved = json.loads(json.dumps(summary))
+        improved["reliability"] = 0.995
+        self.assertTrue(rating_gate_passes(0.99, summary, improved, dict(summary), dict(summary)))
         changed = json.loads(json.dumps(summary))
         changed["reliability"] = 0.98
-        self.assertFalse(rating_gate_passes(summary, dict(summary), changed, dict(summary)))
-        self.assertFalse(rating_gate_passes(summary, dict(summary), {}, dict(summary)))
+        self.assertFalse(rating_gate_passes(0.99, summary, dict(summary), changed, dict(summary)))
+        self.assertFalse(rating_gate_passes(0.99, summary, dict(summary), {}, dict(summary)))
         for missing in ("error_description", "vm_error_level", "vm_error_msg"):
             record = machine_record()
             del record[missing]
@@ -744,6 +981,40 @@ class ControlledHostJobCycleTests(unittest.TestCase):
                 machine_summary(record, [])
         with self.assertRaises(CycleError):
             machine_summary(machine_record(), [{"problem": "missing fields"}])
+
+    def test_null_and_empty_machine_health_messages_normalize_as_clear(self):
+        null_summary = machine_summary(
+            machine_record(error_description=None, vm_error_msg=None),
+            [],
+        )
+        empty_summary = machine_summary(
+            machine_record(error_description="", vm_error_msg=""),
+            [],
+        )
+
+        self.assertEqual(
+            null_summary["health"],
+            {"error_description": "", "vm_error_level": 0.0, "vm_error_msg": ""},
+        )
+        self.assertEqual(null_summary["health"], empty_summary["health"])
+        self.assertTrue(health_is_clear(null_summary))
+        self.assertTrue(
+            rating_gate_passes(0.99, null_summary, empty_summary, null_summary, empty_summary)
+        )
+
+    def test_machine_health_messages_reject_invalid_types_and_flag_nonempty_strings(self):
+        for field in ("error_description", "vm_error_msg"):
+            for value in (False, 0, [], {}):
+                with self.subTest(field=field, invalid=value), self.assertRaisesRegex(
+                    CycleError,
+                    field,
+                ):
+                    machine_summary(machine_record(**{field: value}), [])
+            for value in ("fault", " "):
+                with self.subTest(field=field, nonempty=value):
+                    summary = machine_summary(machine_record(**{field: value}), [])
+                    self.assertEqual(summary["health"][field], value)
+                    self.assertFalse(health_is_clear(summary))
 
     def test_authoritative_reports_parser_accepts_real_empty_shape_and_rejects_wrappers(self):
         self.assertEqual(parse_reports_output("reports: []\n"), [])

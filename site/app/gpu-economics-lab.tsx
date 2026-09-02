@@ -156,6 +156,7 @@ function Control({
         max={max}
         step={step}
         value={value}
+        onInput={(event) => onChange(Number(event.currentTarget.value))}
         onChange={(event) => onChange(Number(event.currentTarget.value))}
       />
       <div className="flex justify-between font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
@@ -332,12 +333,12 @@ export function GpuEconomicsLab() {
                     How spare compute becomes research capacity
                   </CardTitle>
                   <CardDescription className="mt-1 max-w-3xl leading-relaxed">
-                    When Sqwish is idle, the GPUs can earn on Vast.ai. When a researcher needs them,
-                    the intended operating loop is:
+                    GPUs the team has released can earn on Vast.ai. A controlled two-A100 pilot now
+                    shows a fast renter-to-research handoff, with one rating caveat:
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="border-primary/30 bg-primary/5 text-primary">
-                  Interruptible capacity
+                  2 × A100 pilot complete
                 </Badge>
               </div>
             </CardHeader>
@@ -347,8 +348,8 @@ export function GpuEconomicsLab() {
                   <span className="loop-number">01</span>
                   <CircleDollarSign className="size-5 text-primary" aria-hidden="true" />
                   <div>
-                    <h2 className="font-semibold tracking-tight">Rent spare GPUs</h2>
-                    <p>List unused cards as interruptible compute on Vast.ai.</p>
+                    <h2 className="font-semibold tracking-tight">Offer spare GPUs</h2>
+                    <p>List team-idle cards as interruptible compute on Vast.ai.</p>
                   </div>
                 </li>
                 <li className="loop-step">
@@ -356,32 +357,74 @@ export function GpuEconomicsLab() {
                   <Undo2 className="size-5 text-primary" aria-hidden="true" />
                   <div>
                     <h2 className="font-semibold tracking-tight">Reclaim for research</h2>
-                    <p>An internal job takes priority and should recover the required GPUs within seconds.</p>
+                    <p>Unlist first, then start the exact pre-created owner standby. The pilot freed both cards in 82.3 seconds.</p>
                   </div>
                 </li>
                 <li className="loop-step">
                   <span className="loop-number">03</span>
                   <FlaskConical className="size-5 text-primary" aria-hidden="true" />
                   <div>
-                    <h2 className="font-semibold tracking-tight">Run the experiment</h2>
-                    <p>The team uses the box normally while that public capacity stays unavailable.</p>
+                    <h2 className="font-semibold tracking-tight">Run the team job</h2>
+                    <p>A real PyTorch probe saw and used both A100s before the research window began.</p>
                   </div>
                 </li>
                 <li className="loop-step">
                   <span className="loop-number">04</span>
                   <Repeat2 className="size-5 text-primary" aria-hidden="true" />
                   <div>
-                    <h2 className="font-semibold tracking-tight">Return to the market</h2>
-                    <p>When the job ends, release the GPUs and offer the spare capacity again.</p>
+                    <h2 className="font-semibold tracking-tight">Return spare capacity</h2>
+                    <p>Stop the owner job; the interruptible renter resumes automatically, then the GPUs can be offered again.</p>
                   </div>
                 </li>
               </ol>
+              <div className="rounded-lg border border-primary/25 bg-primary/[0.045] p-4 text-sm leading-relaxed">
+                <p className="font-semibold text-foreground">Pilot result: renter to owner in 82.3 seconds</p>
+                <p className="mt-1 text-muted-foreground">
+                  The controlled interruptible renter paused, the exact owner on-demand standby started,
+                  and a real PyTorch check used both A100s. When the owner stopped, the renter returned
+                  automatically. Final cleanup left the host unlisted with no pilot instances or public offers.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Market shape: public on-demand is deliberately expensive, reserved discount is zero,
+                  and interruptible capacity is priced around comparable-market P10. Reclaim aborts if
+                  any outside non-interruptible contract appears.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  <strong className="text-foreground">Owner cost:</strong> the live own-machine instance
+                  showed a $0 GPU charge. Its stopped disk still accrued a small storage charge. The
+                  separate controlled-renter account pays ordinary marketplace charges during qualification;
+                  that is a test expense, not the production owner path.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Vast officially documents a free own-machine test instance and separately documents
+                  on-demand priority over interruptibles. The retained-standby research loop combines those
+                  supported components; the routine reclaim policy and a zero-rating-impact promise are not
+                  documented guarantees.
+                </p>
+              </div>
               <div className="qualification-callout">
                 <Asterisk aria-hidden="true" />
                 <p>
-                  <strong>Qualification gate:</strong> fast reclaim was observed once, but rating-safe
-                  reclaim and automatic renter return are still unproved. Keep this loop out of
-                  production until a clean controlled test passes.
+                  <strong>Rating-safe production gate still open:</strong> reliability stayed at 0.5727243
+                  immediately after handoff and after cleanup, so this cycle caused no observed drop. The
+                  host was already below its immutable original 0.5999925 baseline. A later read-only sample
+                  was 0.5727207 and measured only 161.9 Mbps upload, below Vast&apos;s current 500 Mbps
+                  verification minimum. The disposable-host deadline still prevented the required two-hour
+                  checkpoint. This proves the functional path once; it does not prove rating-safe routine
+                  operation.
+                </p>
+              </div>
+              <div className="qualification-callout border-sky-400/30 bg-sky-400/[0.055]">
+                <ServerCog aria-hidden="true" />
+                <p>
+                  <strong>Verification-growth mode:</strong> while a new host is earning verification,
+                  the operating lock keeps it steadily online and blocks the owner-standby takeover.
+                  Team work must use Vast&apos;s supported Jobs/Create Job route during this phase. The
+                  fast 82.3-second reclaim remains a separate research-first experiment until Vast
+                  confirms that routine owner standby use will not prevent verification or lower rating.
+                  The dedicated-box gate is a 24-hour controlled run: a qualification-trend soak first,
+                  then an explicit mode transition and three four-GPU handoff/checkpoint/return cycles. A
+                  separate no-owner soak is the strict verification control.
                 </p>
               </div>
             </CardContent>
@@ -622,13 +665,21 @@ export function GpuEconomicsLab() {
               <CardTitle className="flex items-center gap-2">
                 <ServerCog className="size-4 text-primary" /> Proof status
               </CardTitle>
-              <CardDescription>What the controlled one- and two-GPU qualification runs actually demonstrated.</CardDescription>
+              <CardDescription>What the controlled two-GPU qualification run actually demonstrated.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="proof-row proof-pass"><ArrowUpRight /> Host self-test and owner GPU workloads passed</div>
-              <div className="proof-row proof-pass"><ArrowUpRight /> Controlled 2-GPU renter reclaimed in about 2.82 seconds</div>
-              <div className="proof-row proof-open"><ArrowDownRight /> Automatic renter return failed after more than 79 seconds</div>
-              <div className="proof-row proof-open"><ArrowDownRight /> Rating-safety gate failed; reliability drop was confounded</div>
+              <div className="proof-row proof-pass"><ArrowUpRight /> A controlled interruptible renter held both A100s with a 10 GB disk cap</div>
+              <div className="proof-row proof-pass"><ArrowUpRight /> Owner reclaim completed in 82.3 seconds; PyTorch saw and used both GPUs</div>
+              <div className="proof-row proof-pass"><ArrowUpRight /> Stopping the owner automatically returned the controlled renter</div>
+              <div className="proof-row proof-pass"><ArrowUpRight /> Reliability stayed at 0.5727243 immediately and after cleanup</div>
+              <div className="proof-row proof-pass"><ArrowUpRight /> Final cleanup left no pilot instances or public offers</div>
+              <div className="proof-row proof-open"><ArrowDownRight /> 0.5727243 remains below the immutable original 0.5999925 baseline</div>
+              <div className="proof-row proof-open"><ArrowDownRight /> No delayed rating check was possible before the disposable VM deadline</div>
+              <p className="rounded-md border border-border/70 bg-muted/35 p-3 text-xs leading-relaxed text-muted-foreground">
+                The functional handoff passed on this disposable two-A100 pilot. One degraded diagnostic
+                cycle cannot establish rating-safe production use; repeat it on the dedicated host with
+                delayed reliability checks before making that promise.
+              </p>
             </CardContent>
           </Card>
         </section>
@@ -640,6 +691,10 @@ export function GpuEconomicsLab() {
           <div className="flex flex-wrap gap-x-4 gap-y-2">
             <a className="source-link" href="https://www.scan.co.uk/products/3xs-sc-pb4-32t-1-month-4x-96gb-nvidia-rtx-pro-6000-512gb-ddr5-ecc-amd-epyc-9354p" target="_blank" rel="noreferrer">SCAN price <ExternalLink /></a>
             <a className="source-link" href="https://cloud.vast.ai/host/market/" target="_blank" rel="noreferrer">Vast market <ExternalLink /></a>
+            <a className="source-link" href="https://docs.vast.ai/host/verification-stages" target="_blank" rel="noreferrer">Verification stages <ExternalLink /></a>
+            <a className="source-link" href="https://docs.vast.ai/host/hosting-overview" target="_blank" rel="noreferrer">Own-machine testing <ExternalLink /></a>
+            <a className="source-link" href="https://docs.vast.ai/guides/instances/choosing/instance-types" target="_blank" rel="noreferrer">Instance priorities <ExternalLink /></a>
+            <a className="source-link" href="https://docs.vast.ai/cli/reference/start-instance" target="_blank" rel="noreferrer">Start standby <ExternalLink /></a>
             <a className="source-link" href="https://www.usenix.org/system/files/atc19-jeon.pdf" target="_blank" rel="noreferrer">Workload evidence <ExternalLink /></a>
           </div>
         </footer>

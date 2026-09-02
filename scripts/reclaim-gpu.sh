@@ -19,7 +19,7 @@ machine_id="${VAST_MACHINE_ID:-}"
 offer_id="${VAST_OWN_OFFER_ID:-}"
 owner_instance_id="${VAST_OWN_INSTANCE_ID:-}"
 expected_gpu_count="${VAST_GPU_COUNT:-}"
-image="${VAST_OWN_IMAGE:-pytorch/pytorch:latest}"
+image="${VAST_OWN_IMAGE:-}"
 disk_gb="${VAST_OWN_DISK_GB:-20}"
 label_prefix="${VAST_OWN_LABEL_PREFIX:-owned-reclaim}"
 
@@ -74,9 +74,33 @@ state_root="$(state_dir)"
 state_file="${state_root}/active-reclaim.json"
 pending_file="${state_root}/pending-reclaim.json"
 lock_dir="${state_root}/reclaim.lock"
+qualification_marker="${state_root}/qualification-mode.json"
 if [[ -e "$state_file" || -e "$pending_file" ]]; then
   die "Active or pending reclaim state exists under ${state_root}. Release or investigate it before reclaiming again."
 fi
+
+require_qualification_hold_absent() {
+  local qualification_machine
+  [[ ! -e "$qualification_marker" ]] || {
+    [[ -f "$qualification_marker" && -r "$qualification_marker" ]] \
+      || die "Qualification marker exists but is not a readable regular file: ${qualification_marker}; refusing owner reclaim"
+    qualification_machine="$(jq -er '
+      if (.schema | type) == "number"
+         and .schema == 1
+         and .active == true
+         and ((.machine_id // "") | tostring | test("^[1-9][0-9]*$"))
+      then (.machine_id | tostring)
+      else error("invalid qualification marker")
+      end
+    ' "$qualification_marker")" \
+      || die "Qualification marker is malformed or has unknown state: ${qualification_marker}; refusing owner reclaim"
+    [[ "$qualification_machine" == "$machine_id" ]] \
+      || die "Qualification marker is for machine ${qualification_machine}, not ${machine_id}; refusing owner reclaim until the shared state root is reconciled"
+    die "Qualification mode is active for machine ${machine_id}; owner reclaim is blocked. Sampling or disabling the hold does not establish that personal owner workloads are verification-safe."
+  }
+}
+
+require_qualification_hold_absent
 
 instance_record=""
 validated_label=""
@@ -217,7 +241,10 @@ if [[ -n "$owner_instance_id" ]]; then
   if ! mkdir -- "$lock_dir" 2>/dev/null; then
     die "Another reclaim/release may be running or a prior attempt needs review: ${lock_dir}"
   fi
-  cleanup_local_lock() { rmdir -- "$lock_dir" 2>/dev/null || true; }
+  cleanup_local_lock() {
+    qualification_interlock_release || true
+    rmdir -- "$lock_dir" 2>/dev/null || true
+  }
   trap cleanup_local_lock EXIT
   [[ ! -e "$state_file" && ! -e "$pending_file" ]] \
     || die "Reclaim state appeared while waiting for the lock"
@@ -227,6 +254,10 @@ if [[ -n "$owner_instance_id" ]]; then
   locked_instance_json="$(vastai show instance "$owner_instance_id" --raw)" \
     || die "Could not re-read owner instance ${owner_instance_id} under the lock"
   validate_precreated_instance "$locked_instance_json" stopped
+  qualification_interlock_acquire \
+    "$state_root" "start owner instance ${owner_instance_id}" \
+    || die "Could not acquire the qualification/owner interlock"
+  require_qualification_hold_absent
 
   snapshot_dir="${state_root}/snapshots/${timestamp}-before-reclaim"
   mkdir -p -- "${state_root}/snapshots"
@@ -254,6 +285,8 @@ if [[ -n "$owner_instance_id" ]]; then
     start_status=$?
     warn "Start command exited ${start_status}; its output is not authoritative, so verifying exact instance status"
   fi
+  qualification_interlock_release \
+    || die "Owner Start was requested but the qualification/owner interlock did not release cleanly"
   [[ -z "$start_output" ]] || printf '%s\n' "$start_output" >"${snapshot_dir}/start-output.txt"
 
   running_confirmed=false
@@ -297,7 +330,8 @@ fi
 mode="fresh-created"
 require_uint "on-demand offer ID" "$offer_id"
 require_uint "disk GB" "$disk_gb"
-[[ -n "$image" ]] || die "Owner image cannot be empty"
+[[ "$image" =~ ^(docker\.io/)?pytorch/pytorch:[A-Za-z0-9_.-]*cuda[A-Za-z0-9_.-]*@sha256:[0-9a-f]{64}$ ]] \
+  || die "Fresh-created owner image must be a reviewed digest-pinned pytorch/pytorch CUDA image"
 
 note "Reading machine and on-demand offer before any mutation..."
 machine_json="$(vastai show machine "$machine_id" --raw)" || die "Could not read machine ${machine_id}"
@@ -332,9 +366,17 @@ if ! mkdir -- "$lock_dir" 2>/dev/null; then
   die "Another reclaim/release may be running or a prior attempt needs review: ${lock_dir}"
 fi
 pending_tmp="${pending_file}.tmp"
-cleanup_local_lock() { rm -f -- "$pending_tmp"; rmdir -- "$lock_dir" 2>/dev/null || true; }
+cleanup_local_lock() {
+  qualification_interlock_release || true
+  rm -f -- "$pending_tmp"
+  rmdir -- "$lock_dir" 2>/dev/null || true
+}
 trap cleanup_local_lock EXIT
 [[ ! -e "$state_file" && ! -e "$pending_file" ]] || die "Reclaim state appeared while waiting for the lock"
+qualification_interlock_acquire \
+  "$state_root" "create owner instance on machine ${machine_id}" \
+  || die "Could not acquire the qualification/owner interlock"
+require_qualification_hold_absent
 
 snapshot_dir="${state_root}/snapshots/${timestamp}-before-reclaim"
 mkdir -p -- "${state_root}/snapshots"
@@ -352,6 +394,8 @@ note "Creating owner on-demand instance..."
 if ! create_output="$("${create_cmd[@]}" 2> >(redact_cli_error >&2))"; then
   die "Create outcome may be uncertain; inspect Vast Instances for label ${label}. Pending state was retained."
 fi
+qualification_interlock_release \
+  || die "Owner Create was requested but the qualification/owner interlock did not release cleanly"
 jq -e . >/dev/null <<<"$create_output" || die "Create returned non-JSON; inspect label ${label}. Pending state was retained."
 own_instance_id="$(jq -er '(.new_contract // .contract_id // .id) | select(. != null) | tostring' <<<"$create_output")" \
   || die "Create response lacked an instance ID; inspect label ${label}. Pending state was retained."

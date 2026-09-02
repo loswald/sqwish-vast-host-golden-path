@@ -60,6 +60,44 @@ assert_no_mutation() {
   fi
 }
 
+interlock_test_root="$tmp/interlock-state"
+mkdir -p -- "$interlock_test_root"
+qualification_interlock_acquire "$interlock_test_root" "fake owner Start"
+interlock_token="$(cat "$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME/owner-token")"
+if VAST_QUALIFICATION_INTERLOCK_TIMEOUT_SECONDS=0 bash -c '
+  source "$1"
+  qualification_interlock_acquire "$2" "contending qualification enable"
+' -- "$ROOT/scripts/lib/common.sh" "$interlock_test_root" \
+  >"$tmp/interlock-contender.out" 2>"$tmp/interlock-contender.err"; then
+  printf 'FAIL a second process entered the qualification/owner interlock\n' >&2
+  exit 1
+fi
+assert_contains "$tmp/interlock-contender.err" 'existing lock was retained'
+[[ "$(cat "$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME/owner-token")" == "$interlock_token" ]]
+qualification_interlock_release
+[[ ! -e "$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME" ]]
+printf 'PASS qualification/owner interlock excludes another process and owner releases it\n'
+
+mkdir -- "$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME"
+printf 'old-untrusted-owner\n' \
+  >"$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME/owner-token"
+printf '{"schema":1}\n' \
+  >"$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME/owner.json"
+if VAST_QUALIFICATION_INTERLOCK_TIMEOUT_SECONDS=0 bash -c '
+  source "$1"
+  qualification_interlock_acquire "$2" "stale-safe test"
+' -- "$ROOT/scripts/lib/common.sh" "$interlock_test_root" \
+  >"$tmp/interlock-old.out" 2>"$tmp/interlock-old.err"; then
+  printf 'FAIL an existing old qualification/owner interlock was entered\n' >&2
+  exit 1
+fi
+assert_contains "$tmp/interlock-old.err" 'must never be cleared merely because it is old'
+[[ "$(cat "$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME/owner-token")" == old-untrusted-owner ]]
+rm -- "$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME/owner-token" \
+  "$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME/owner.json"
+rmdir -- "$interlock_test_root/$QUALIFICATION_INTERLOCK_DIRNAME" "$interlock_test_root"
+printf 'PASS qualification/owner interlock never auto-clears an old lock\n'
+
 for actual_status in created exited stopped; do
   instance_status_is_safely_stopped "$actual_status" stopped stopped || {
     printf 'FAIL safe stopped predicate rejected %s/stopped/stopped\n' "$actual_status" >&2
@@ -92,6 +130,45 @@ if instance_status_is_exactly_running running stopped running; then
   exit 1
 fi
 printf 'PASS shared stopped and running predicates fail closed\n'
+
+reset_case mutable-owner-image
+if VAST_OWN_INSTANCE_ID= VAST_OWN_IMAGE=pytorch/pytorch:latest \
+  FAKE_VAST_SCENARIO=safe "$subject_root/scripts/reclaim-gpu.sh" \
+  >"$tmp/mutable-owner-image.out" 2>"$tmp/mutable-owner-image.err"; then
+  printf 'FAIL fresh-created reclaim accepted a mutable owner image tag\n' >&2
+  exit 1
+fi
+assert_contains "$tmp/mutable-owner-image.err" \
+  'Fresh-created owner image must be a reviewed digest-pinned pytorch/pytorch CUDA image'
+assert_no_mutation
+printf 'PASS fresh-created reclaim rejects mutable owner image tags\n'
+
+for marker_case in active malformed wrong-machine; do
+  reset_case "qualification-$marker_case"
+  mkdir -p "$VAST_STATE_DIR"
+  case "$marker_case" in
+    active)
+      jq -n '{schema:1,active:true,machine_id:"9001"}' >"$VAST_STATE_DIR/qualification-mode.json"
+      expected_message='Qualification mode is active for machine 9001'
+      ;;
+    malformed)
+      printf '{"schema":1,"active":false,"machine_id":"9001"}\n' >"$VAST_STATE_DIR/qualification-mode.json"
+      expected_message='Qualification marker is malformed or has unknown state'
+      ;;
+    wrong-machine)
+      jq -n '{schema:1,active:true,machine_id:"9002"}' >"$VAST_STATE_DIR/qualification-mode.json"
+      expected_message='Qualification marker is for machine 9002, not 9001'
+      ;;
+  esac
+  if FAKE_VAST_SCENARIO=safe "$subject_root/scripts/reclaim-gpu.sh" \
+    >"$tmp/qualification-$marker_case.out" 2>"$tmp/qualification-$marker_case.err"; then
+    printf 'FAIL reclaim ignored qualification marker case %s\n' "$marker_case" >&2
+    exit 1
+  fi
+  assert_contains "$tmp/qualification-$marker_case.err" "$expected_message"
+  assert_no_mutation
+  printf 'PASS reclaim fails closed for qualification marker case %s\n' "$marker_case"
+done
 
 for scenario in safe live-created-stopped exited-stopped; do
   reset_case "preview-start-$scenario"

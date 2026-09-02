@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Fail-closed two-account Host Job reclaim qualification.
+"""Fail-closed two-account Host Job scheduler-transition experiment.
 
 This controller is intentionally narrow.  The controlled interruptible must
 already exist, occupy the whole machine, and be running while the host is
-unlisted.  Raw evidence is written under VAST_STATE_DIR, outside this repo.
+unlisted.  A stopped-client/running-owner transition is recorded as one
+experimental observation; it is not treated as a Host Job price guarantee or
+as production-readiness proof.  Raw evidence is written under VAST_STATE_DIR,
+outside this repo.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -34,6 +38,7 @@ OWNER_WORKLOAD_SECONDS = 180
 OWNER_WORKLOAD_HEARTBEAT_SECONDS = 30
 OWNER_WORKLOAD_MAX_HEARTBEATS = 8
 OWNER_LOG_TAIL_LINES = 5000
+CLI_TIMEOUT_SECONDS = 45.0
 PYTORCH_WORKLOAD = f"""import json
 import subprocess
 import time
@@ -342,8 +347,14 @@ def machine_summary(machine: dict[str, Any], report_rows: Any) -> dict[str, Any]
     for report in reports:
         if not all(isinstance(report.get(field), str) for field in ("problem", "message", "created_at")):
             raise CycleError("machine reports response contains an invalid report row")
-    if "error_description" not in machine or not isinstance(machine["error_description"], str):
-        raise CycleError("machine error_description health field is missing or invalid")
+    normalized_messages: dict[str, str] = {}
+    for field in ("error_description", "vm_error_msg"):
+        if field not in machine:
+            raise CycleError(f"machine {field} health field is missing or invalid")
+        value = machine[field]
+        if value is not None and not isinstance(value, str):
+            raise CycleError(f"machine {field} health field is missing or invalid")
+        normalized_messages[field] = "" if value is None else value
     if (
         "vm_error_level" not in machine
         or isinstance(machine["vm_error_level"], bool)
@@ -351,8 +362,6 @@ def machine_summary(machine: dict[str, Any], report_rows: Any) -> dict[str, Any]
         or not math.isfinite(float(machine["vm_error_level"]))
     ):
         raise CycleError("machine vm_error_level health field is missing or invalid")
-    if "vm_error_msg" not in machine or not isinstance(machine["vm_error_msg"], str):
-        raise CycleError("machine vm_error_msg health field is missing or invalid")
     return {
         "at": utc_now(),
         "reliability": reliability(machine),
@@ -364,9 +373,9 @@ def machine_summary(machine: dict[str, Any], report_rows: Any) -> dict[str, Any]
             "num_recent_reports": machine.get("num_recent_reports"),
         },
         "health": {
-            "error_description": machine["error_description"],
+            "error_description": normalized_messages["error_description"],
             "vm_error_level": float(machine["vm_error_level"]),
-            "vm_error_msg": machine["vm_error_msg"],
+            "vm_error_msg": normalized_messages["vm_error_msg"],
         },
     }
 
@@ -380,6 +389,40 @@ def health_is_clear(summary: dict[str, Any]) -> bool:
         and health.get("vm_error_msg") == ""
         and summary.get("reports") == 0
     )
+
+
+def summary_reliability(summary: dict[str, Any]) -> float:
+    raw = summary.get("reliability")
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(float(raw)):
+        raise CycleError("reliability summary is missing or invalid")
+    return float(raw)
+
+
+def original_reliability_assessment(
+    original_reliability_baseline: float,
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    current = summary_reliability(summary)
+    return {
+        "at": utc_now(),
+        "original_reliability_baseline": original_reliability_baseline,
+        "observed_reliability": current,
+        "delta_from_original": current - original_reliability_baseline,
+        "at_or_above_original": current >= original_reliability_baseline,
+    }
+
+
+def require_original_reliability_floor(
+    original_reliability_baseline: float,
+    summary: dict[str, Any],
+    what: str,
+) -> None:
+    assessment = original_reliability_assessment(original_reliability_baseline, summary)
+    if not assessment["at_or_above_original"]:
+        raise CycleError(
+            f"{what} reliability {assessment['observed_reliability']} is below immutable original "
+            f"baseline {original_reliability_baseline}; refusing to use a degraded run-local baseline"
+        )
 
 
 def parse_end(value: Any) -> float | None:
@@ -553,14 +596,33 @@ def parse_workload_log(text: str) -> dict[str, Any]:
     }
 
 
-def rating_gate_passes(*summaries: dict[str, Any]) -> bool:
+def rating_gate_passes(
+    original_reliability_baseline: float,
+    *summaries: dict[str, Any],
+) -> bool:
     if len(summaries) != 4 or any(not summary for summary in summaries):
         return False
-    keys = ("reliability", "verification", "reports", "report_records", "health")
-    return all(
-        all(summary.get(key) == summaries[0].get(key) for summary in summaries)
-        for key in keys
-    ) and all(health_is_clear(summary) for summary in summaries)
+    if (
+        isinstance(original_reliability_baseline, bool)
+        or not isinstance(original_reliability_baseline, (int, float))
+        or not math.isfinite(float(original_reliability_baseline))
+    ):
+        return False
+    try:
+        floor_holds = all(
+            summary_reliability(summary) >= float(original_reliability_baseline)
+            for summary in summaries
+        )
+    except CycleError:
+        return False
+    # Reliability improvements are allowed. Verification remains a separate,
+    # conservative consistency gate because this harness does not know how to
+    # order every API value Vast may return for its verification stages.
+    verification_unchanged = all(
+        summary.get("verification") == summaries[0].get("verification")
+        for summary in summaries
+    )
+    return floor_holds and verification_unchanged and all(health_is_clear(summary) for summary in summaries)
 
 
 def build_defjob_args(cfg: "Config", price: float) -> list[str]:
@@ -611,13 +673,15 @@ class Config:
     expected_owner_low_renter_price: float
     expected_owner_high_renter_price: float
     owner_image: str
+    original_reliability_baseline: float
     gpu_count: int = 2
     poll_seconds: float = 3.0
     reclaim_timeout: int = 30
     owner_run_seconds: int = 60
     auto_resume_seconds: int = 60
     delayed_seconds: int = 7200
-    max_public_seconds: int = 900
+    max_public_seconds: int = 600
+    max_fixed_end_seconds: int = 900
     apply: bool = False
 
 
@@ -653,6 +717,64 @@ class Cycle:
         self.delayed: dict[str, Any] | None = None
         self.auto_resume = False
         self.manual_start_used = False
+        self.experimental_takeover_observed = False
+        self.experimental_cycle_completed = False
+        self.listed_at: float | None = None
+        self.public_cutoff = threading.Event()
+        self.watchdog_stop = threading.Event()
+        self.watchdog_thread: threading.Thread | None = None
+        self.watchdog_result: dict[str, Any] | None = None
+
+    def public_action_deadline(self) -> float:
+        if self.listed_at is None:
+            raise CycleError("public-listing clock was not started")
+        return self.listed_at + self.cfg.max_public_seconds - CLI_TIMEOUT_SECONDS
+
+    def require_public_action_budget(self, phase: str) -> None:
+        if self.public_cutoff.is_set() or self.monotonic() >= self.public_action_deadline():
+            raise CycleError(f"public-listing action budget expired before {phase}")
+
+    def start_public_watchdog(self) -> None:
+        if self.watchdog_thread is not None:
+            raise CycleError("public-listing watchdog already exists")
+        delay = max(self.cfg.max_public_seconds - CLI_TIMEOUT_SECONDS, 0.0)
+
+        def watchdog() -> None:
+            if self.watchdog_stop.wait(delay):
+                return
+            self.public_cutoff.set()
+            payload: dict[str, Any] = {
+                "at": utc_now(),
+                "status": "unlist-attempted-by-public-window-watchdog",
+                "machine_id": self.cfg.machine_id,
+                "max_public_seconds": self.cfg.max_public_seconds,
+                "unlist_timeout_reserve_seconds": CLI_TIMEOUT_SECONDS,
+            }
+            try:
+                result = self.host.run(["unlist", "machine", self.cfg.machine_id], check=False)
+                payload.update(
+                    {
+                        "returncode": result.returncode,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                    }
+                )
+            except BaseException as exc:
+                payload["exception"] = redact(str(exc))
+            self.watchdog_result = payload
+            atomic_json(self.run_dir / "public-window-watchdog.json", payload)
+
+        self.watchdog_thread = threading.Thread(
+            target=watchdog,
+            name="controlled-hostjob-unlist-watchdog",
+            daemon=True,
+        )
+        self.watchdog_thread.start()
+
+    def stop_public_watchdog(self) -> None:
+        self.watchdog_stop.set()
+        if self.watchdog_thread is not None:
+            self.watchdog_thread.join(timeout=1.0)
 
     def query_client(self) -> dict[str, Any]:
         value = self.client.json(["show", "instance", self.cfg.client_instance_id, "--raw"])
@@ -692,6 +814,8 @@ class Cycle:
         atomic_json(self.run_dir / "authenticated-accounts.json", self.account_ids)
 
     def snapshot(self, phase: str) -> dict[str, Any]:
+        if self.listing_touched:
+            self.require_public_action_budget(phase)
         self.sequence += 1
         payload = {
             "at": utc_now(),
@@ -881,17 +1005,32 @@ class Cycle:
                 self.sleep(5)
         raise CycleError("default Host Job definition or owner bid records remain after removal")
 
-    def wait_for_reclaim(self) -> None:
+    def wait_for_experimental_takeover(self) -> None:
         deadline = self.monotonic() + self.cfg.reclaim_timeout
         while self.monotonic() <= deadline:
-            snap = self.snapshot("reclaim-poll")
+            snap = self.snapshot("experimental-takeover-poll")
             client_record = exact_record(snap["client_instance"], self.cfg.client_instance_id, "controlled client")
             require_client_identity(client_record, self.cfg)
             if is_safely_stopped(client_record) and self.owner_jobs_running(snap["host_instances"]):
-                atomic_json(self.run_dir / "reclaim-confirmed.json", {"at": utc_now(), "snapshot": self.sequence})
+                atomic_json(
+                    self.run_dir / "experimental-takeover-observed.json",
+                    {
+                        "at": utc_now(),
+                        "snapshot": self.sequence,
+                        "observed": True,
+                        "scope": (
+                            "one bounded experimental scheduler-transition observation only; this does not prove "
+                            "that Host Job price will preempt a live renter in production"
+                        ),
+                    },
+                )
+                self.experimental_takeover_observed = True
                 return
             self.sleep(self.cfg.poll_seconds)
-        raise CycleError("reclaim did not reach exact stopped-client/running-owner state before timeout")
+        raise CycleError(
+            "experimental scheduler transition did not reach exact stopped-client/running-owner "
+            "state before timeout"
+        )
 
     def monitor_owner(self) -> None:
         deadline = self.monotonic() + self.cfg.owner_run_seconds
@@ -1018,7 +1157,8 @@ class Cycle:
 
     def cleanup(self) -> None:
         # Close the listing first so destroying the full-machine client cannot
-        # expose newly vacant GPUs. Attempt every cleanup step independently.
+        # expose newly vacant GPUs. If that cannot be proved, retain the owner
+        # jobs so cleanup does not deliberately vacate the machine.
         if self.cycle_started:
             self.unlisted_proved = False
             try:
@@ -1027,11 +1167,17 @@ class Cycle:
             except Exception as exc:  # noqa: BLE001 - preserve all cleanup attempts
                 self.cleanup_errors.append(f"unlist: {exc}")
         if self.defjob_touched:
-            try:
-                self.host.run(["remove", "defjob", self.cfg.machine_id])
-                self.prove_defjob_removed()
-            except Exception as exc:  # noqa: BLE001
-                self.cleanup_errors.append(f"remove defjob: {exc}")
+            if not self.unlisted_proved:
+                self.cleanup_errors.append(
+                    "remove defjob: skipped because post-mutation unlisting was not proved; "
+                    "owner jobs retained and capacity state remains unresolved"
+                )
+            else:
+                try:
+                    self.host.run(["remove", "defjob", self.cfg.machine_id])
+                    self.prove_defjob_removed()
+                except Exception as exc:  # noqa: BLE001
+                    self.cleanup_errors.append(f"remove defjob: {exc}")
         if self.destroy_authorized and self.cycle_started and self.unlisted_proved and not self.cleanup_errors:
             try:
                 single_before = self.client.json(["show", "instance", self.cfg.client_instance_id, "--raw"])
@@ -1044,7 +1190,9 @@ class Cycle:
                     list_rows = strict_instance_records(list_before, "controlled client full instance response")
                     listed_record = exact_record(list_rows, self.cfg.client_instance_id, "controlled client list before destroy")
                     require_client_identity(listed_record, self.cfg)
-                    destroy = self.client.run(["destroy", "instance", self.cfg.client_instance_id, "--raw"])
+                    destroy = self.client.run(
+                        ["destroy", "instance", self.cfg.client_instance_id, "--yes", "--raw"]
+                    )
                     atomic_text(self.run_dir / "destroy-output.txt", destroy.stdout)
                     confirmed = mutation_explicitly_succeeded(destroy.stdout)
                     method = "explicit-json-success" if confirmed else ""
@@ -1074,6 +1222,19 @@ class Cycle:
             self.run_dir / "cleanup.json",
             {"at": utc_now(), "errors": self.cleanup_errors, "complete": not self.cleanup_errors},
         )
+        self.stop_public_watchdog()
+        if self.listed_at is not None:
+            atomic_json(
+                self.run_dir / "public-window.json",
+                {
+                    "listed_monotonic": self.listed_at,
+                    "finished_monotonic": self.monotonic(),
+                    "elapsed_seconds": self.monotonic() - self.listed_at,
+                    "fixed_end_epoch": self.cfg.fixed_end_epoch,
+                    "max_public_seconds": self.cfg.max_public_seconds,
+                    "watchdog_fired": self.watchdog_result is not None,
+                },
+            )
 
     def run(self) -> dict[str, Any]:
         self.prove_unlisted(samples=2)
@@ -1091,6 +1252,16 @@ class Cycle:
         if not health_is_clear(self.baseline):
             raise CycleError("baseline report or machine-health state is not clean")
         atomic_json(self.run_dir / "reliability-baseline.json", self.baseline)
+        baseline_floor = original_reliability_assessment(
+            self.cfg.original_reliability_baseline,
+            self.baseline,
+        )
+        atomic_json(self.run_dir / "original-reliability-baseline-gate.json", baseline_floor)
+        require_original_reliability_floor(
+            self.cfg.original_reliability_baseline,
+            self.baseline,
+            "pre-mutation",
+        )
 
         # A preflight absence proof must never authorize later client destruction.
         # Only a fresh three-sample proof after an attempted public listing may do so.
@@ -1100,6 +1271,8 @@ class Cycle:
         self.host.run(build_defjob_args(self.cfg, self.cfg.host_job_low))
         self.listing_touched = True
         self.unlisted_proved = False
+        self.listed_at = self.monotonic()
+        self.start_public_watchdog()
         listing_result = self.host.run(build_list_args(self.cfg))
         try:
             listing_response = json.loads(listing_result.stdout)
@@ -1109,17 +1282,24 @@ class Cycle:
         self.wait_for_staged_owner_jobs()
         self.prove_low_phase()
 
+        self.require_public_action_budget("raise Host Job")
         self.host.run(build_defjob_args(self.cfg, self.cfg.host_job_high))
-        self.wait_for_reclaim()
+        self.wait_for_experimental_takeover()
         self.monitor_owner()
         self.collect_owner_workload_proof()
+        self.require_public_action_budget("lower Host Job")
         self.host.run(build_defjob_args(self.cfg, self.cfg.host_job_low))
         if not self.wait_for_auto_resume():
             self.guarded_manual_start()
 
         self.immediate = machine_summary(self.query_machine(), self.query_reports())
         atomic_json(self.run_dir / "reliability-immediate.json", self.immediate)
-        return {"cycle_completed": True}
+        self.experimental_cycle_completed = True
+        return {
+            "experimental_cycle_completed": True,
+            "experimental_takeover_observed": self.experimental_takeover_observed,
+            "production_readiness_established": False,
+        }
 
 
 def validate_config(cfg: Config) -> None:
@@ -1136,6 +1316,14 @@ def validate_config(cfg: Config) -> None:
         raise CycleError("expected renter-side Host Job low price must be below its high price")
     if not PINNED_PYTORCH_IMAGE_RE.fullmatch(cfg.owner_image):
         raise CycleError("owner image must be an allowlisted digest-pinned pytorch/pytorch CUDA image")
+    if (
+        isinstance(cfg.original_reliability_baseline, bool)
+        or not isinstance(cfg.original_reliability_baseline, (int, float))
+        or not math.isfinite(cfg.original_reliability_baseline)
+        or cfg.original_reliability_baseline < 0
+        or cfg.original_reliability_baseline > 1
+    ):
+        raise CycleError("original reliability baseline must be a finite number between zero and one")
     if cfg.owner_run_seconds <= 0 or cfg.owner_run_seconds > OWNER_WORKLOAD_SECONDS - 30:
         raise CycleError("owner dwell must be positive and end at least 30 seconds before the bounded workload exits")
     prices = (
@@ -1152,14 +1340,22 @@ def validate_config(cfg: Config) -> None:
         raise CycleError("reclaim and automatic-resume timeouts must be positive")
     if cfg.delayed_seconds < 7200:
         raise CycleError("delayed reliability observation must be at least 7200 seconds")
-    if cfg.max_public_seconds <= 0 or cfg.max_public_seconds > 900:
-        raise CycleError("maximum public-listing window must be between 1 and 900 seconds")
+    if cfg.max_public_seconds < 60 or cfg.max_public_seconds > 600:
+        raise CycleError("maximum public-listing window must be between 60 and 600 seconds")
+    if cfg.max_fixed_end_seconds < 60 or cfg.max_fixed_end_seconds > 86_400:
+        raise CycleError("maximum fixed-end horizon must be between 60 and 86400 seconds")
     now = int(time.time())
     minimum = now + (5 * cfg.reclaim_timeout) + cfg.owner_run_seconds + cfg.auto_resume_seconds + 60
-    maximum = now + cfg.max_public_seconds
+    maximum = now + cfg.max_fixed_end_seconds
     if cfg.fixed_end_epoch < minimum or cfg.fixed_end_epoch > maximum:
         raise CycleError(
-            f"fixed end must be between {minimum} and {maximum} (enough cycle time, at most max public window)"
+            f"fixed end must be between {minimum} and {maximum} "
+            "(enough cycle time, within the separate fixed-end horizon)"
+        )
+    required_public_seconds = minimum - now
+    if cfg.max_public_seconds < required_public_seconds + int(CLI_TIMEOUT_SECONDS):
+        raise CycleError(
+            "public-listing window is too short for the configured cycle plus the unlist reserve"
         )
 
 
@@ -1176,6 +1372,56 @@ def state_root(project: Path) -> Path:
     except OSError:
         pass
     return resolved
+
+
+def load_or_pin_original_reliability_baseline(root: Path, cfg: Config) -> dict[str, Any]:
+    baseline_dir = root / "original-reliability-baselines"
+    baseline_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        baseline_dir.chmod(0o700)
+    except OSError:
+        pass
+    path = baseline_dir / f"machine-{cfg.machine_id}.json"
+    if not path.exists():
+        payload = {
+            "schema": 1,
+            "pinned_at": utc_now(),
+            "machine_id": cfg.machine_id,
+            "original_reliability_baseline": cfg.original_reliability_baseline,
+            "source": "explicit operator-supplied pre-qualification observation",
+        }
+        try:
+            with path.open("x", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2, sort_keys=True)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                path.chmod(0o600)
+            except OSError:
+                pass
+        except FileExistsError:
+            pass
+    try:
+        pinned = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CycleError("pinned original reliability evidence is unreadable or malformed") from exc
+    if not isinstance(pinned, dict) or pinned.get("schema") != 1:
+        raise CycleError("pinned original reliability evidence has an unsupported shape")
+    if pinned.get("machine_id") != cfg.machine_id:
+        raise CycleError("pinned original reliability evidence names a different machine")
+    pinned_value = pinned.get("original_reliability_baseline")
+    if (
+        isinstance(pinned_value, bool)
+        or not isinstance(pinned_value, (int, float))
+        or not math.isfinite(float(pinned_value))
+    ):
+        raise CycleError("pinned original reliability evidence contains an invalid value")
+    if float(pinned_value) != cfg.original_reliability_baseline:
+        raise CycleError(
+            "supplied original reliability baseline differs from the machine's already-pinned immutable value"
+        )
+    return pinned
 
 
 def parse_args(argv: list[str] | None = None) -> Config:
@@ -1198,12 +1444,19 @@ def parse_args(argv: list[str] | None = None) -> Config:
     parser.add_argument("--expected-owner-low-renter-price", type=float, required=True)
     parser.add_argument("--expected-owner-high-renter-price", type=float, required=True)
     parser.add_argument("--owner-image", required=True, help="digest-pinned pytorch/pytorch CUDA image")
+    parser.add_argument(
+        "--original-reliability-baseline",
+        type=float,
+        required=True,
+        help="immutable reliability observed before any qualification attempts; never use a run-local replacement",
+    )
     parser.add_argument("--poll-seconds", type=float, default=3.0)
     parser.add_argument("--reclaim-timeout", type=int, default=30)
     parser.add_argument("--owner-run-seconds", type=int, default=60)
     parser.add_argument("--auto-resume-seconds", type=int, default=60)
     parser.add_argument("--delayed-seconds", type=int, default=7200)
-    parser.add_argument("--max-public-seconds", type=int, default=900)
+    parser.add_argument("--max-public-seconds", type=int, default=600)
+    parser.add_argument("--max-fixed-end-seconds", type=int, default=900)
     parser.add_argument("--apply", action="store_true")
     return Config(**vars(parser.parse_args(argv)))
 
@@ -1223,16 +1476,78 @@ def preview(cfg: Config, host: Cli, client: Cli, run_dir: Path) -> None:
     if not health_is_clear(baseline):
         raise CycleError("baseline report or machine-health state is not clean")
     atomic_json(run_dir / "reliability-baseline.json", baseline)
+    baseline_floor = original_reliability_assessment(cfg.original_reliability_baseline, baseline)
+    atomic_json(run_dir / "original-reliability-baseline-gate.json", baseline_floor)
+    require_original_reliability_floor(
+        cfg.original_reliability_baseline,
+        baseline,
+        "dry-run preflight",
+    )
     plan = {
         "host_job_low": build_defjob_args(cfg, cfg.host_job_low),
         "fixed_end_listing": build_list_args(cfg),
-        "host_job_high": build_defjob_args(cfg, cfg.host_job_high),
+        "experimental_high_bid_stimulus": build_defjob_args(cfg, cfg.host_job_high),
         "release_host_job_low": build_defjob_args(cfg, cfg.host_job_low),
+        "takeover_interpretation": (
+            "a stopped-client/running-owner state is one experimental observation, not a production guarantee"
+        ),
+        "production_readiness_rule": (
+            "this one-cycle harness never establishes production readiness; every rating observation must also "
+            "remain at or above the immutable original reliability baseline"
+        ),
         "manual_start_condition": "only after auto-resume-failure.json is fsynced and exact client is safely stopped",
-        "cleanup_order": ["unlist", "remove defjob", "destroy exact controlled client"],
+        "cleanup_order": [
+            "unlist and prove three consecutive bid/on-demand absence samples",
+            "only after unlist proof: remove defjob and prove removal",
+            "only after both proofs: destroy exact controlled client with --yes and prove success or absence",
+        ],
     }
     atomic_json(run_dir / "dry-run-plan.json", plan)
     print(f"DRY RUN passed exact read-only preflight. Private plan: {run_dir / 'dry-run-plan.json'}")
+
+
+def delayed_rating_skip_reason(cycle: Cycle) -> str | None:
+    if not cycle.experimental_takeover_observed:
+        return "experimental takeover was not observed; skip the two-hour wait after immediate cleanup evidence"
+    if cycle.post_cleanup is None:
+        return "post-cleanup reliability observation is unavailable"
+    assessment = original_reliability_assessment(
+        cycle.cfg.original_reliability_baseline,
+        cycle.post_cleanup,
+    )
+    if not assessment["at_or_above_original"]:
+        return "post-cleanup reliability is already below the immutable original baseline"
+    return None
+
+
+def build_production_readiness_result(
+    cycle: Cycle,
+    cycle_error: str | None,
+    rating_gate: bool,
+) -> dict[str, Any]:
+    checks = {
+        "experimental_cycle_completed": cycle.experimental_cycle_completed,
+        "experimental_takeover_observed": cycle.experimental_takeover_observed,
+        "automatic_resume_observed": cycle.auto_resume,
+        "manual_start_not_used": not cycle.manual_start_used,
+        "cleanup_complete": not cycle.cleanup_errors,
+        "no_cycle_error": cycle_error is None,
+        "no_reliability_loss_vs_original": rating_gate,
+    }
+    technical_gates_passed = all(checks.values())
+    blockers = [name for name, passed in checks.items() if not passed]
+    blockers.append(
+        "one experimental scheduler transition cannot establish that Host Job price will preempt a live renter in production"
+    )
+    return {
+        "established": False,
+        "status": "not-established-by-this-experiment",
+        "original_reliability_baseline": cycle.cfg.original_reliability_baseline,
+        "single_cycle_technical_gates_passed": technical_gates_passed,
+        "checks": checks,
+        "blocking_reasons": blockers,
+        "takeover_evidence_scope": "single bounded experimental observation only",
+    }
 
 
 def run_locked(cfg: Config, root: Path) -> int:
@@ -1243,6 +1558,8 @@ def run_locked(cfg: Config, root: Path) -> int:
     except OSError:
         pass
     atomic_json(run_dir / "config.json", dataclasses.asdict(cfg) | {"owner_command": OWNER_COMMAND})
+    pinned_baseline = load_or_pin_original_reliability_baseline(root, cfg)
+    atomic_json(run_dir / "original-reliability-baseline-source.json", pinned_baseline)
     host = Cli(cfg.host_cli, "host")
     client = Cli(cfg.client_cli, "client")
     if Path(host.executable).resolve() == Path(client.executable).resolve():
@@ -1283,9 +1600,21 @@ def run_locked(cfg: Config, root: Path) -> int:
         try:
             cycle.post_cleanup = machine_summary(cycle.query_machine(), cycle.query_reports())
             atomic_json(run_dir / "reliability-post-cleanup.json", cycle.post_cleanup)
-            time.sleep(cfg.delayed_seconds)
-            cycle.delayed = machine_summary(cycle.query_machine(), cycle.query_reports())
-            atomic_json(run_dir / "reliability-delayed.json", cycle.delayed)
+            skip_reason = delayed_rating_skip_reason(cycle)
+            if skip_reason is None:
+                time.sleep(cfg.delayed_seconds)
+                cycle.delayed = machine_summary(cycle.query_machine(), cycle.query_reports())
+                atomic_json(run_dir / "reliability-delayed.json", cycle.delayed)
+            else:
+                atomic_json(
+                    run_dir / "reliability-delayed-skipped.json",
+                    {
+                        "at": utc_now(),
+                        "skipped": True,
+                        "reason": skip_reason,
+                        "wait_seconds_not_performed": cfg.delayed_seconds,
+                    },
+                )
         except Exception as exc:  # noqa: BLE001
             cycle_error = cycle_error or f"reliability observation failed: {exc}"
 
@@ -1293,13 +1622,38 @@ def run_locked(cfg: Config, root: Path) -> int:
     immediate = cycle.immediate or {}
     post_cleanup = cycle.post_cleanup or {}
     delayed = cycle.delayed or {}
-    rating_gate = rating_gate_passes(baseline, immediate, post_cleanup, delayed)
+    rating_gate = rating_gate_passes(
+        cfg.original_reliability_baseline,
+        baseline,
+        immediate,
+        post_cleanup,
+        delayed,
+    )
+    production_readiness = build_production_readiness_result(cycle, cycle_error, rating_gate)
+    reliability_against_original: dict[str, Any] = {}
+    for name, summary in (
+        ("pre_mutation", baseline),
+        ("immediate", immediate),
+        ("post_cleanup", post_cleanup),
+        ("delayed", delayed),
+    ):
+        if summary:
+            reliability_against_original[name] = original_reliability_assessment(
+                cfg.original_reliability_baseline,
+                summary,
+            )
     result = {
         "at": utc_now(),
         "cycle_error": cycle_error,
+        "experimental_cycle_completed": cycle.experimental_cycle_completed,
+        "experimental_takeover_observed": cycle.experimental_takeover_observed,
+        "takeover_evidence_scope": "single bounded experimental observation only; not a production guarantee",
         "automatic_resume_gate": cycle.auto_resume,
         "manual_start_used": cycle.manual_start_used,
         "rating_gate": rating_gate,
+        "original_reliability_baseline": cfg.original_reliability_baseline,
+        "reliability_against_original": reliability_against_original,
+        "production_readiness": production_readiness,
         "cleanup_complete": not cycle.cleanup_errors,
         "baseline": baseline,
         "immediate": immediate,
@@ -1308,7 +1662,7 @@ def run_locked(cfg: Config, root: Path) -> int:
     }
     atomic_json(run_dir / "result.json", result)
     print(f"Private result: {run_dir / 'result.json'}")
-    if cycle_error or cycle.cleanup_errors or not rating_gate or not cycle.auto_resume:
+    if not production_readiness["established"]:
         return 1
     return 0
 

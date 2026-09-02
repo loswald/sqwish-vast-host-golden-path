@@ -1,0 +1,12 @@
+{
+  "observation": "late post-cleanup read-only qualification sample",
+  "reliability": 0.5727207,
+  "verification": "unverified",
+  "network_download_mbps": 4200.4,
+  "network_upload_mbps": 161.9,
+  "network_upload_meets_current_500_mbps_minimum": false,
+  "machine_errors_clear": true,
+  "reports_clear": true,
+  "vast_mutations_performed": 0,
+  "interpretation": "This host could not qualify under the current symmetric-network minimum. The tiny score movement from 0.5727243 is an observation, not an attributed handoff penalty."
+}

@@ -168,7 +168,7 @@ body {
   margin: 0;
   cursor: ew-resize;
   appearance: none;
-  touch-action: none;
+  touch-action: pan-y;
   background: transparent;
 }
 
@@ -180,9 +180,9 @@ body {
 }
 
 .economics-slider::-webkit-slider-thumb {
-  width: 18px;
-  height: 18px;
-  margin-top: -6.5px;
+  width: 22px;
+  height: 22px;
+  margin-top: -8.5px;
   cursor: grab;
   appearance: none;
   border: 1px solid var(--primary);
@@ -209,8 +209,8 @@ body {
 }
 
 .economics-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   cursor: grab;
   border: 1px solid var(--primary);
   border-radius: 999px;

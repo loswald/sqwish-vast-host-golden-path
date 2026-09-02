@@ -200,7 +200,7 @@ Research teams do not universally subsidise compute this way because unpredictab
 
 ## Recommendation
 
-1. **Keep Vast interruptible hosting as a gated dedicated-box experiment.** The controlled outside-client trial proved rapid Host Job reclaim, but automatic renter return failed and the confounded reliability decrease provided no rating-safety evidence. Repeat a clean cycle on dedicated hardware before treating it as production spillover income.
+1. **Treat Vast as released-capacity hosting, not instant spillover.** Three clean Host Job attempts did not preempt the controlled renter, the official docs provide no Host Job preemption/latency/rating guarantee, and the full setup sequence reduced reliability from 0.5999925 to 0.5727243 before those attempts. Sell only capacity the team can release for the contract window, drain before owner use, or reserve GPUs for bursts.
 2. **Run any inference alternative on one physical GPU first.** Keep the other three unlisted and immediately available to research. Do not use MIG in the first market test because marketplace recognition of the slices is unproven.
 3. **Use engy SN53 only as a high-risk API pilot.** First prove exact-card support, the pinned model, proof validity, concurrency, and p99 service gates. Measure emissions over at least one complete scoring epoch; do not value paid token volume as direct cash revenue.
 4. **Use Salad only as a low-cost compatibility probe.** Confirm that the client recognises the card, assigns container work, uses the intended GPUs, and provides a redeemable net payout before forecasting.

@@ -93,6 +93,7 @@ The same sample showed why cgroup memory alone is misleading after qualification
 5. Run simultaneous GPU load long enough to expose power, cooling, clock throttling, and driver resets. Record per-GPU temperature, power, clocks, ECC/Xid events, and host stability.
 6. Run concurrent storage and symmetric network load while all four GPUs are active. A single 2 TB NVMe and an undisclosed NIC are the most likely shared bottlenecks.
 7. Test a current CUDA 12.8+ PyTorch container. Older images that contain only architecture-specific cubins and no compatible PTX can fail on Blackwell even when the host driver is current.
+8. With the host vacant and no owner workload running, enable `tools/verification_guard.py --enable-qualification-mode`. Keep every controller on the same private `VAST_STATE_DIR` and sample at five-minute intervals during the clean soak.
 
 Keep VM mode off for this sequence:
 
@@ -101,25 +102,29 @@ sudo python3 /var/lib/vastai_kaalia/enable_vms.py off
 python3 /var/lib/vastai_kaalia/enable_vms.py check
 ```
 
-Vast warns that the IOMMU configuration needed for renter VMs can reduce NCCL performance on multi-GPU machines that depend on PCIe peer-to-peer communication. VM support may improve market visibility, so revisit it only after the Docker and owner-job measurements are complete.
+Vast warns that the IOMMU configuration needed for renter VMs can reduce NCCL performance on multi-GPU machines that depend on PCIe peer-to-peer communication. Its current verification guide also says VM support significantly improves verification likelihood. Record Docker-only VM-off operation as an explicit verification tradeoff, benchmark both modes before production if SCAN supports them, and never toggle IOMMU or VM mode during a clean qualification soak.
 
-## Staged listing and reclaim trial
+## Staged controlled qualification
 
-### Stage 1: one 4-GPU interruptible
+### Stage 1: one 4-GPU controlled qualification
 
-1. While vacant, pre-create and stop the exact 4-GPU owner on-demand test instance, and stage the reviewed Host Job with `--args /bin/bash -lc '<OWNER_COMMAND>'` below the planned client bid.
+1. While vacant and before creating an owner standby, run the ordinary Self-Test once and enable qualification HOLD. Pin the immutable score, verification, reports, errors, and configuration baseline. Host work must use Vast Jobs/Create Job during this clean arm.
 2. List with a fixed short end date, `discount_rate=0`, `vol_size=0`, an intentionally unattractive outside on-demand price, and `min_chunk=4`. Have the separately authenticated controlled client acquire the exact full-machine interruptible immediately, then unlist. Abort if any unknown client wins.
-3. Record verification and reliability, then run the Host Job reclaim first. The two-A100 trial found that Host Jobs stayed inert while unlisted, so any required relist must retain the fixed end and full-machine controls and be watched continuously for an unexpected contract.
-4. Verify that Vast pauses the controlled client, retains its disk, and gives the owner workload the intended GPU topology. Do not stop services or touch the renter container.
-5. Lower the Host Job, wait up to the acceptance limit, and measure return. The earlier client did not auto-resume within more than 79 seconds; if this repeats, record a failed automatic-return gate and use the exact controlled client's guarded Start action. That fallback is unavailable to a host controlling an unrelated public renter.
-6. Test the owner on-demand path separately by starting only the exact pre-created instance, then releasing only that instance with `scripts/release-gpu.sh`. Do not configure a fresh-create offer while occupied.
+3. Record verification and reliability, then run at most one bounded Host Job diagnostic. The two-A100 trial's three clean attempts at $1.10/30 seconds, $1.30/90 seconds, and $3.00/GPU-hour/120 seconds did not preempt the controlled renter. Do not keep increasing price; Vast does not document it as a preemption lever.
+4. If the controlled client remains running at the timeout, record the expected failed gate and clean up. If a future Vast release unexpectedly produces a clean pause, verify disk retention and owner topology before testing release. Do not stop services or touch the renter container.
+5. Measure renter return only if a clean platform pause occurred. A client-side Start fallback is available only in qualification and still fails the automatic-return gate.
+6. End and archive the clean arm before any owner on-demand experiment. Explicitly disable qualification HOLD, prepare the exact owner standby while vacant, then test that path separately. Starting the standby is not a Host Job/Create Job and cannot be counted as clean verification time.
 7. Record verification, reliability, GPU health, disk health, and daemon state immediately and after delayed metric updates. Any material reliability decrease keeps production reclaim disabled.
 
 ### Stage 2: four 1-GPU interruptibles
 
 Relist with `min_chunk=1`. Vast documents that this permits 1-, 2-, and 4-GPU offers and gives each running instance exclusive GPUs; CPU and RAM baselines scale with the GPU fraction. Nominally, each 1-GPU renter receives about 8 physical cores and 128 GB RAM, but the published offer values are authoritative.
 
-Fill all four slices with separately authenticated controlled 1-GPU interruptible contracts, then repeat the Host Job and exact pre-created 4-GPU owner reclaim paths. Vast documents the priority pieces, but it does **not** explicitly document one 4-GPU owner request atomically preempting four separate 1-GPU contracts. Measure every client's return; if any needs its own Start action, the automatic-return gate fails even if controlled recovery succeeds. Keep atomic multi-contract reclaim and rating safety marked unproved until clean immediate and delayed checks pass.
+Fill all four slices with separately authenticated controlled 1-GPU interruptible contracts only if a diagnostic multi-slice qualification is still useful. Vast does **not** document a Host Job atomically preempting four separate 1-GPU contracts. The production decision remains blocked unless Vast publishes that mechanism and clean testing proves every pause, return, and delayed rating checkpoint.
+
+Use [`CONTROLLED-24H-VERIFICATION-AND-HANDOFF-PILOT.md`](CONTROLLED-24H-VERIFICATION-AND-HANDOFF-PILOT.md) for the extended combined run. It keeps a qualification-trend soak with one fully stopped allowlisted standby, four checkpointing one-GPU interruptibles, the explicit mode transition, three full-machine research-first handoffs, automatic return proofs, and score observations in separate evidence bands. Keep the no-owner strict verification soak as a separate control.
+
+For production, list only GPU slices that researchers explicitly release for the full contract window, unlist and drain before owner use, or reserve capacity for burst demand. Do not make the purchase case depend on forced renter handoff.
 
 Stop the trial if any outside on-demand or reserved contract appears. A high on-demand price discourages such a contract but cannot prevent it.
 
@@ -143,8 +148,13 @@ Proceed beyond the week only when:
 - public IPv4, inbound TCP/UDP ports, and sustained symmetric networking pass externally;
 - a dedicated Docker-storage device or compliant storage layout is available;
 - Vast self-test, four-GPU load, concurrent storage/network load, and Blackwell container tests pass;
-- both `min_chunk=4` and the controlled `min_chunk=1` pause/resume trials preserve renter state; and
+- the operating plan uses explicit release, contract drain, or reserved GPUs and does not depend on Host Job preemption; and
 - the owner's real NCCL workload performs acceptably on the measured topology.
+
+Near-instant renter handoff is a separate blocked feature gate. Enable it only
+if Vast documents a supported owner-reclaim mechanism and a controlled test on
+the delivered machine passes reclaim, automatic return, and delayed rating
+checks.
 
 ## Primary sources
 
@@ -153,6 +163,7 @@ Proceed beyond the week only when:
 - [Vast hosting overview, min-GPU slicing, and owner self-rent](https://docs.vast.ai/host/hosting-overview)
 - [Vast Docker resource allocation](https://docs.vast.ai/guides/instances/docker-environment)
 - [Vast instance priority, pause, persistence, and resume](https://docs.vast.ai/guides/instances/choosing/instance-types)
+- [Vast `set defjob` background-job reference](https://docs.vast.ai/cli/reference/set-defjob)
 - [Vast VM/IOMMU and NCCL caveat](https://docs.vast.ai/host/vms)
 - [Vast CLI GPU names, including RTX PRO 6000 Server and Workstation](https://docs.vast.ai/cli/reference/launch-instance)
 - [AMD EPYC 9354P specifications](https://www.amd.com/en/products/processors/server/epyc/4th-generation-9004-and-8004-series/amd-epyc-9354p.html)

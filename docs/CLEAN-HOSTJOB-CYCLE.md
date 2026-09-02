@@ -5,6 +5,68 @@ Host Job phase. It assumes the exact two-GPU interruptible has already been
 acquired by the separate controlled client and the host is unlisted. It does
 not create a renter, sample prices, or expose a vacant host.
 
+## Result and production status
+
+This controller is a diagnostic harness. It is **not** a production reclaim
+script. Three clean live attempts raised the Host Job to `$1.10/GPU-hour` for
+30 seconds, `$1.30/GPU-hour` for 90 seconds, and `$3.00/GPU-hour` for 120
+seconds. In every attempt the exact controlled interruptible remained running
+and the owner jobs did not take its GPUs. The final corrected attempt held the
+immediate reliability value flat at `0.5727243`, but because no handoff occurred
+it provides no evidence that a successful handoff would be rating-safe.
+
+The official [`set defjob`](https://docs.vast.ai/cli/reference/set-defjob)
+reference calls this a background job and documents its price input. It does
+not define price as a preemption control, promise a reclaim latency, or promise
+no reliability effect. Vast's [instance-type priority
+rules](https://docs.vast.ai/guides/instances/choosing/instance-types) say an
+interruptible may pause when outbid by another interruptible or displaced by
+on-demand. They do not grant a Host Job an owner-only eviction priority.
+
+Sqwish's near-instant owner-reclaim and rating-safe-handoff production gate is
+therefore **BLOCKED**. Use explicit-release, contract-drain, or reserved-capacity
+operations instead.
+
+## What succeeded after the Host Job tests
+
+The separate `tools/controlled_owner_standby_cycle.py` experiment used an exact
+pre-created host-account **on-demand** standby rather than a Host Job. Its final
+17-comparable market snapshot put renter whole-pair P10 at `$0.7466667/hour`,
+mapped to a `$0.28/GPU-hour` host interruptible floor. The outside on-demand
+deterrent was `$5.84/GPU-hour` host-side and `$15.5733/hour` renter-facing for
+the pair; reserved discount was zero.
+
+With one exact full-machine interruptible running from the separate controlled
+account, the controller unlisted and proved both offer types absent, then
+started only the exact safely stopped owner standby. The renter moved to the
+safe-stopped tuple and the owner reached `running/running/running` in **82.281
+seconds** from the research decision. Exact owner stop returned the same renter
+automatically; the guarded fallback Start was not used. A separate post-pilot
+probe proved real PyTorch CUDA work across both owner GPUs. Cleanup proved no
+contracts and no bid/on-demand offers.
+
+This does not rehabilitate Host Jobs as a preemption mechanism. It also does
+not establish production readiness: reliability was `0.5727243` before the
+successful takeover, immediately afterward, and after cleanup, below immutable
+original `0.5999925`. The delayed check was skipped at the disposable host's
+preconfigured automatic-deletion deadline. Vast says a new-machine score starts
+low and grows with stable uptime, making the earlier restart a plausible but
+unproved explanation for the drop. Vast also says personal workloads can fail
+verification while directing host work through Jobs; obtain clarification
+before using own-machine on-demand instances for daily research.
+
+Preparation had three specific pitfalls: a `10/10` listing returned HTTP 422,
+the known accepted `5.84/3` preparation shape worked, and
+`--cancel-unavail` produced the false-ownership error on the exact own offer.
+The acquisition guard must explicitly allow one exact safely stopped standby
+by ID and label without admitting any other target-machine record.
+
+Do not run this harness while trying to raise a new machine's reliability or
+reach verification. Vast says reliability grows through stable uptime and
+warns unverified hosts against unnecessary reboots/configuration changes. Its
+verification guide also requires a dedicated machine and says personal
+workloads fail verification.
+
 Run this only on a dedicated physical host whose provider permits marketplace
 hosting. Raw evidence contains private resource identifiers and stays under
 `VAST_STATE_DIR`, outside this repository.
@@ -16,17 +78,25 @@ Provide two different executables. `--host-cli` uses the host account and
 its key from its own private configuration; the controller refuses API-key
 arguments and refuses to run when the executable paths resolve to the same
 file. It also queries both authenticated user records and requires two distinct
-positive account IDs before the first mutation. A small wrapper that selects a
-separate `HOME` is sufficient:
+positive account IDs before the first mutation. Use one wrapper per account.
+Each wrapper must clear an inherited `VAST_API_KEY` and select separate home,
+configuration, cache, and state directories; changing `HOME` alone is not an
+account-isolation boundary:
 
 ```bash
 #!/usr/bin/env bash
 set -Eeuo pipefail
-export HOME=/home/operator/vast-controlled-client
+account_root=/home/operator/vast-controlled-client
+unset VAST_API_KEY
+export HOME="$account_root"
+export XDG_CONFIG_HOME="$account_root/.config"
+export XDG_CACHE_HOME="$account_root/.cache"
+export XDG_STATE_HOME="$account_root/.local/state"
 exec /usr/local/bin/vastai "$@"
 ```
 
-Keep the wrapper and both key files mode `0700`/`0600`.
+Create the host wrapper with a different `account_root`. Keep each account root
+and wrapper mode `0700`, and each key file mode `0600`.
 
 ## Preconditions
 
@@ -43,18 +113,26 @@ Keep the wrapper and both key files mode `0700`/`0600`.
   began, the unlist command succeeded, and three consecutive samples proved
   both offer types absent. The initial preflight absence proof is deliberately
   cleared before the first mutation and cannot authorize destruction. If the
-  post-mutation proof fails, destruction is skipped. A client ID configured as
-  `VAST_OWN_INSTANCE_ID` is never eligible for destruction.
+  post-mutation proof fails, the owner Host Jobs are retained, capacity state is
+  treated as unresolved, and client destruction is skipped. A client ID
+  configured as `VAST_OWN_INSTANCE_ID` is never eligible for destruction.
 - Prices come from a fresh live comparison. Host Job prices are host-entered
   per GPU-hour. The controlled client's bid is renter-facing per machine-hour.
-- Choose a fixed end at least long enough for the dwell and both timeouts, and
-  no more than 15 minutes away. The controller aborts and cleans up if that
-  exact end, full-machine chunk, on-demand price, and renter-facing floor are
-  not visible on the exact machine and every exact target offer.
+- Choose a fixed end at least long enough for the dwell and both timeouts. Bound
+  it separately with `--max-fixed-end-seconds` (60-86,400 seconds). Bound actual
+  public exposure with `--max-public-seconds` (60-600 seconds); a watchdog
+  attempts unlisting one CLI timeout before that public cap. The controller
+  aborts and cleans up if the exact end, full-machine chunk, on-demand price,
+  and renter-facing floor are not visible on the exact machine and target
+  offers.
 - Machine reliability, verification, and all three machine-error fields must
-  be present and clean before mutation. Machine report counters may be null,
-  so the controller uses the authoritative `vastai reports <machine> --raw`
-  response. The current official CLI implementation prints that response as
+  be present and clean before mutation. For `error_description` and
+  `vm_error_msg`, either JSON null or an empty string is clear; both normalize
+  to an empty string for checkpoint comparison. Missing fields, other types,
+  nonempty strings, or a nonzero `vm_error_level` fail the health gate. Machine
+  report counters may be null, so the controller uses the authoritative
+  `vastai reports <machine> --raw` response. The current official CLI
+  implementation prints that response as
   `reports: [...]` even when `--raw` is supplied; the controller accepts that
   exact prefix or a bare API array, rejects other wrappers, and requires every
   report object to be complete. The array must be empty at baseline. See the
@@ -76,17 +154,24 @@ PINNED_PYTORCH_CUDA_IMAGE_DIGEST="${PYTORCH_TAG}@${PYTORCH_DIGEST}"
 Record the resolved digest in the private evidence. Use the exact values
 captured during controlled acquisition:
 
+Define the invocation once, run the read-only preflight with a short-lived end,
+then generate a new end immediately before apply:
+
 ```bash
 export VAST_STATE_DIR=/home/operator/.local/state/vast-host-golden-path
-END_EPOCH=$(( $(date +%s) + 600 ))
+PUBLIC_WINDOW_SECONDS=900
+FIXED_END_HORIZON_SECONDS=45000
 
-python3 tools/controlled_hostjob_cycle.py \
+run_controlled_cycle() {
+  local end_epoch="$1"
+  shift
+  python3 tools/controlled_hostjob_cycle.py \
   --machine-id "$MACHINE_ID" \
   --client-instance-id "$CONTROLLED_CLIENT_ID" \
   --client-label "$CONTROLLED_CLIENT_LABEL" \
   --host-cli /home/operator/bin/vast-host-cli \
   --client-cli /home/operator/bin/vast-client-cli \
-  --fixed-end-epoch "$END_EPOCH" \
+  --fixed-end-epoch "$end_epoch" \
   --on-demand-price "$ON_DEMAND_DETERRENT" \
   --listing-floor "$HOST_LISTING_FLOOR_PER_GPU" \
   --expected-renter-floor "$RENTER_MACHINE_FLOOR" \
@@ -98,13 +183,29 @@ python3 tools/controlled_hostjob_cycle.py \
   --host-job-high "$HOST_JOB_HIGH_PER_GPU" \
   --expected-owner-low-renter-price "$OWNER_LOW_RENTER_PRICE_EACH" \
   --expected-owner-high-renter-price "$OWNER_HIGH_RENTER_PRICE_EACH" \
-  --owner-image "$PINNED_PYTORCH_CUDA_IMAGE_DIGEST"
+  --owner-image "$PINNED_PYTORCH_CUDA_IMAGE_DIGEST" \
+  --max-public-seconds "$PUBLIC_WINDOW_SECONDS" \
+  --max-fixed-end-seconds "$FIXED_END_HORIZON_SECONDS" \
+  "$@"
+}
+
+DRY_RUN_END_EPOCH=$(( $(date +%s) + 43200 ))
+run_controlled_cycle "$DRY_RUN_END_EPOCH"
 ```
 
 Inspect `dry-run-plan.json`, manually reconcile Host Machines/Contracts, then
-repeat the same command with `--apply`. The two required terminal confirmations
-name the exact machine and controlled instance. There is no noninteractive
-bypass.
+generate a fresh end and apply immediately in the same shell. Do not reuse the
+dry-run epoch:
+
+```bash
+APPLY_END_EPOCH=$(( $(date +%s) + 43200 ))
+run_controlled_cycle "$APPLY_END_EPOCH" --apply
+```
+
+The two required terminal confirmations name the exact machine and controlled
+instance. The controller validates the fresh end again after confirmation.
+There is no noninteractive bypass. Dry run and apply create separate timestamped
+run directories; compare their `config.json` files when reviewing the apply.
 
 The owner definition always ends with these arguments:
 
@@ -135,7 +236,12 @@ observed surcharge is not treated as a universal scheduler formula.
 
 Every price argument must be finite and greater than zero. The delayed check
 cannot be shortened below 7,200 seconds, the owner dwell must be positive, and
-the maximum public window cannot exceed 900 seconds.
+the maximum public window cannot exceed 600 seconds.
+
+Do not interpret a higher Host Job price as a stronger documented reclaim
+request. If the renter remains running at the configured timeout, stop the
+experiment, preserve the snapshots, and run guarded cleanup. Increasing price
+again only repeats an unsupported hypothesis.
 
 ## Resume and cleanup order
 
@@ -150,11 +256,13 @@ manual recovery still fails the automatic-resume gate.
 Cleanup runs after success, failure, Ctrl-C, SIGTERM, or SIGHUP:
 
 1. unlist and prove both offer types absent in three consecutive samples;
-2. remove the Host Job and prove both its machine definition and all owner bid
-   records are absent;
+2. only after step 1 succeeds, remove the Host Job and prove both its machine
+   definition and all owner bid records are absent; if step 1 fails, retain the
+   owner jobs and treat capacity state as unresolved;
 3. only after step 1, re-prove the controlled client's full identity in both
    its single-instance and full-list views, destroy that exact ID, and require
-   either explicit JSON success or exact absence from both views.
+   the CLI's noninteractive `--yes` plus either explicit JSON success or exact
+   absence from both views.
 
 Every offer-absence sample must be a top-level JSON array containing only
 object rows. An error object, wrapper object, null response, or malformed row
@@ -165,21 +273,40 @@ killed. Do not stop Vast, Docker, the host, or any container.
 
 ## Evidence and decision fields
 
-The timestamped private run directory contains:
+Dry run and apply use separate timestamped private directories. A successful
+dry run contains `config.json`, `authenticated-accounts.json`,
+`reliability-baseline.json`, and `dry-run-plan.json`. Apply artifacts are
+stage-conditional:
 
-- `config.json`, `dry-run-plan.json`, `authenticated-accounts.json`, and
-  `host-instances-before-defjob.json`;
-- `snapshots/*.json` plus `timeline.ndjson` every 1-5 seconds through reclaim,
-  owner dwell, automatic return, and guarded recovery;
-- `reclaim-confirmed.json`;
-- `low-phase-confirmed.json`;
+- `config.json` is written when the run directory is created;
+- `authenticated-accounts.json` follows the distinct-account proof, and
+  `host-instances-before-defjob.json` follows the owner-record preflight;
+- `snapshots/*.json` plus `timeline.ndjson` at polling boundaries through
+  reclaim, owner dwell, automatic return, and guarded recovery; the configured
+  1-5 second sleep is not a guaranteed capture cadence because each snapshot
+  performs several CLI requests;
+- `reclaim-confirmed.json` and `low-phase-confirmed.json` after those gates pass;
 - `owner-jobs.json`, both `owner-logs/*.log`, and
-  `owner-workload-proof.json`;
-- either `auto-resume-confirmed.json` or `auto-resume-failure.json`;
+  `owner-workload-proof.json` after the owner records and workload are proved;
+- either `auto-resume-confirmed.json` or `auto-resume-failure.json` after the
+  automatic-return phase is reached;
 - `manual-start-confirmed.json` only when controlled recovery was necessary;
 - `reliability-baseline.json`, `reliability-immediate.json`,
-  `reliability-post-cleanup.json`, and `reliability-delayed.json`;
-- `cleanup.json`, `destroy-verification.json`, and `result.json`.
+  `reliability-post-cleanup.json`, and `reliability-delayed.json` only as each
+  checkpoint completes;
+- `cleanup.json` when the cleanup attempt completes, and
+  `destroy-verification.json` only after destruction is proved;
+- `result.json` on a normal controller return. A failure before the first
+  mutation or any cleanup failure skips delayed observation. A post-mutation
+  cycle failure followed by successful cleanup still receives the post-cleanup
+  and delayed checks. Any checkpoint not reached is recorded as `{}`.
+
+The controller currently parses the `list machine` response and cleanup
+offer-absence samples in memory but does not save those raw responses as
+standalone evidence. It also does not guarantee a fixed sampling cadence. Do
+not treat this directory as a complete production audit trail. If the process
+is interrupted, cleanup still runs, but `result.json` may be absent because the
+final decision was not reached.
 
 `result.json` reports `automatic_resume_gate`, `manual_start_used`,
 `rating_gate`, `cleanup_complete`, and any `cycle_error`. The process exits
