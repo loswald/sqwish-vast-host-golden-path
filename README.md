@@ -10,6 +10,12 @@ The completed two-A100 setup, hard storage cap, controlled outside-client reclai
 
 Use [`docs/CONTROLLED-2H-2XA100-TRIAL.md`](docs/CONTROLLED-2H-2XA100-TRIAL.md) for the exact two-hour separate-client, Host Job, owner-preemption, slicing, rating-observation, and cleanup procedure.
 
+Use [`docs/CLEAN-HOSTJOB-CYCLE.md`](docs/CLEAN-HOSTJOB-CYCLE.md) and
+`tools/controlled_hostjob_cycle.py` to repeat the previously confounded Host Job
+phase with corrected shell arguments, fixed-end verification, continuous
+private snapshots, delayed reliability measurement, guarded client recovery,
+and proved cleanup.
+
 For the SCAN 4x RTX PRO 6000 candidate, use the staged technical checklist in [`docs/SCAN-4X-RTX-PRO-6000-PILOT.md`](docs/SCAN-4X-RTX-PRO-6000-PILOT.md) before installation or listing.
 
 Use [`docs/ECONOMICS.md`](docs/ECONOMICS.md) for the current ex-VAT 18-period model, exact `RTX PRO 6000 WS` comparables, and transparent three-researcher usage patterns. Recalculate rather than preserving its dated market snapshot.
@@ -52,8 +58,9 @@ Unlisting, stopping the daemon, restarting Docker, powering off, killing contain
 - `tools/economics_model.py` — dependency-free 18-period ex-VAT calculator.
 - `tools/usage_patterns.py` — auditable light/normal/campaign/deadline workload calendars.
 - `tools/adaptive_pricing.py` — dry-run-first market sampler and guarded interruptible minimum updater.
+- `tools/controlled_hostjob_cycle.py` — exact two-account clean Host Job cycle with fixed-end and cleanup proofs.
 - `tests/fake-cli-tests.sh` — offline lifecycle guardrail checks using a fake Vast CLI.
-- `site/` — source for the private interactive economics and workload dashboard.
+- `site/` — source for the public interactive economics, workload, and spare-capacity operating-loop dashboard.
 - `.env.example` — non-secret configuration template.
 - `validate.sh` — syntax and repository hygiene checks.
 

@@ -11,6 +11,7 @@ required=(
   docs/RUNBOOK.md
   docs/TRIAL-NOTES.md
   docs/A100-2X-LIVE-TRIAL.md
+  docs/CLEAN-HOSTJOB-CYCLE.md
   docs/SCAN-4X-RTX-PRO-6000-PILOT.md
   docs/ECONOMICS.md
   docs/ADAPTIVE-PRICING.md
@@ -29,6 +30,8 @@ required=(
   tools/economics_model.py
   tools/usage_patterns.py
   tools/adaptive_pricing.py
+  tools/controlled_hostjob_cycle.py
+  tests/test_controlled_hostjob_cycle.py
   site/app/gpu-economics-lab.tsx
   site/package.json
   .env.example
@@ -45,10 +48,11 @@ for path in "${required[@]}"; do
 done
 
 if command -v python3 >/dev/null 2>&1; then
-  if python3 -m py_compile "${ROOT}/tools/economics_model.py" "${ROOT}/tools/usage_patterns.py" "${ROOT}/tools/adaptive_pricing.py" \
+  if python3 -m py_compile "${ROOT}/tools/economics_model.py" "${ROOT}/tools/usage_patterns.py" "${ROOT}/tools/adaptive_pricing.py" "${ROOT}/tools/controlled_hostjob_cycle.py" "${ROOT}/tests/test_controlled_hostjob_cycle.py" \
      && python3 "${ROOT}/tools/economics_model.py" >/dev/null \
-     && python3 "${ROOT}/tools/usage_patterns.py" >/dev/null; then
-    printf 'PASS economics and usage models\n'
+     && python3 "${ROOT}/tools/usage_patterns.py" >/dev/null \
+     && (cd "${ROOT}" && python3 -m unittest discover -s tests -p 'test_controlled_hostjob_cycle.py'); then
+    printf 'PASS Python models and clean Host Job cycle tests\n'
   else
     failed=1
   fi

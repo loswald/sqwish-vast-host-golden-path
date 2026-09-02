@@ -6,12 +6,16 @@ import {
   ArrowUpRight,
   Asterisk,
   BadgePoundSterling,
+  CircleDollarSign,
   CircleHelp,
   ExternalLink,
+  FlaskConical,
   Gauge,
+  Repeat2,
   RotateCcw,
   ServerCog,
   Sparkles,
+  Undo2,
   Zap,
 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts';
@@ -318,6 +322,71 @@ export function GpuEconomicsLab() {
             </Button>
           </div>
         </header>
+
+        <section className="mb-6" aria-labelledby="capacity-loop-title">
+          <Card className="capacity-loop overflow-hidden border-primary/25 bg-card/90 shadow-2xl shadow-black/10">
+            <CardHeader className="border-b border-border/70">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle id="capacity-loop-title" className="text-lg sm:text-xl">
+                    How spare compute becomes research capacity
+                  </CardTitle>
+                  <CardDescription className="mt-1 max-w-3xl leading-relaxed">
+                    When Sqwish is idle, the GPUs can earn on Vast.ai. When a researcher needs them,
+                    the intended operating loop is:
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="border-primary/30 bg-primary/5 text-primary">
+                  Interruptible capacity
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <li className="loop-step">
+                  <span className="loop-number">01</span>
+                  <CircleDollarSign className="size-5 text-primary" aria-hidden="true" />
+                  <div>
+                    <h2 className="font-semibold tracking-tight">Rent spare GPUs</h2>
+                    <p>List unused cards as interruptible compute on Vast.ai.</p>
+                  </div>
+                </li>
+                <li className="loop-step">
+                  <span className="loop-number">02</span>
+                  <Undo2 className="size-5 text-primary" aria-hidden="true" />
+                  <div>
+                    <h2 className="font-semibold tracking-tight">Reclaim for research</h2>
+                    <p>An internal job takes priority and should recover the required GPUs within seconds.</p>
+                  </div>
+                </li>
+                <li className="loop-step">
+                  <span className="loop-number">03</span>
+                  <FlaskConical className="size-5 text-primary" aria-hidden="true" />
+                  <div>
+                    <h2 className="font-semibold tracking-tight">Run the experiment</h2>
+                    <p>The team uses the box normally while that public capacity stays unavailable.</p>
+                  </div>
+                </li>
+                <li className="loop-step">
+                  <span className="loop-number">04</span>
+                  <Repeat2 className="size-5 text-primary" aria-hidden="true" />
+                  <div>
+                    <h2 className="font-semibold tracking-tight">Return to the market</h2>
+                    <p>When the job ends, release the GPUs and offer the spare capacity again.</p>
+                  </div>
+                </li>
+              </ol>
+              <div className="qualification-callout">
+                <Asterisk aria-hidden="true" />
+                <p>
+                  <strong>Qualification gate:</strong> fast reclaim was observed once, but rating-safe
+                  reclaim and automatic renter return are still unproved. Keep this loop out of
+                  production until a clean controlled test passes.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
 
         <section className="mb-6 grid gap-4 lg:grid-cols-[minmax(280px,0.72fr)_minmax(0,1.8fr)]">
           <Card className="control-panel border-border/80 bg-card/90 shadow-2xl shadow-black/10">
