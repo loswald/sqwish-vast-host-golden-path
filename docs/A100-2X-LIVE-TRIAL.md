@@ -82,7 +82,7 @@ That run reported:
 - the temporary test instance was destroyed on the first attempt; and
 - the remote result reached `DONE`.
 
-This proves the diagnostic hardware and workload path. The command warned that relaxed mode does **not** qualify the host for verification. Record the result as a relaxed pass and keep verification pending until reliability and the ordinary requirements permit a strict run.
+This proves the diagnostic hardware and workload path. The command warned that relaxed mode does **not** qualify the host for verification. Record the result as a relaxed pass and keep verification pending until reliability and the ordinary requirements permit a strict run. The live Machine Reports view showed no unacknowledged reports, so there was no separate hardware or daemon error to repair. Vast's [verification process](https://docs.vast.ai/host/understanding-verification) is automated: reaching the minimum makes a host eligible but does not guarantee immediate promotion.
 
 ## Prepare owner standbys before accepting renters
 
@@ -122,7 +122,7 @@ The host was sliced with `min_chunk=1`, reserved discounts disabled, volume offe
 
 | Component | Host setting | Renter-visible result |
 | --- | ---: | ---: |
-| Interruptible minimum, per GPU-hour | **$0.26** | **$0.3466667** |
+| Interruptible minimum, per GPU-hour | **$0.225** | **$0.3000** |
 | On-demand GPU, per GPU-hour | **$5.84** | **$7.7866667** |
 | Storage, per GB-month | **$0.15** | **$0.20** |
 | Upload bandwidth | **$39.99/TB** | **$53.32/TB** |
@@ -133,7 +133,7 @@ For the CLI, the bandwidth values are per GB, so the corresponding listing argum
 ```bash
 vastai list machine <MACHINE_ID> \
   --price_gpu 5.84 \
-  --price_min_bid 0.26 \
+  --price_min_bid 0.225 \
   --price_disk 0.15 \
   --price_inetu 0.03999 \
   --price_inetd 0.002 \
@@ -145,7 +145,7 @@ vastai list machine <MACHINE_ID> \
 
 The live search result confirmed the current conversion: the renter saw four-thirds of the host setting, while the host floor remained the amount the host intended to earn. Do not subtract another 25% from the host figure when modelling revenue. Always verify both the host record and renter-visible search result after listing; do not assume the conversion or unit labels will remain unchanged.
 
-These were quick-fill trial prices. They are not a production claim that bandwidth covers provider egress or that $0.26 is a durable market floor. Re-sample comparable A100 interruptible offers before each future listing and reprice only future acceptance; changing the minimum bid does not evict an existing contract.
+The listing initially used a $0.26 host floor, about $0.3467 renter-facing. With the machine still vacant, it was reduced to $0.225 host-side and verified at exactly $0.3000 in renter search. These were quick-fill trial prices, not a production claim that bandwidth covers provider egress or that $0.225 is a durable market floor. Re-sample comparable A100 interruptible offers before each future listing and reprice only future acceptance; changing the minimum bid does not evict an existing contract.
 
 ## Outside-renter reclaim test still required
 
