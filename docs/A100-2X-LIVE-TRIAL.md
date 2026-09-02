@@ -95,7 +95,9 @@ The trial prepared these two on-demand templates sequentially:
 | Small research job | 1 | 20 GB | Container saw one A100-SXM4-40GB with 40,960 MiB | `actual_status=exited`, `intended_status=stopped`, `cur_state=stopped` |
 | Full-node research job | 2 | 20 GB | Container saw GPU indices 0 and 1, both A100-SXM4-40GB with 40,960 MiB | `actual_status=exited`, `intended_status=stopped`, `cur_state=stopped` |
 
-Both records reported `is_bid=false`. Start each template once while vacant, validate the GPU count from inside its container, then stop it and poll the exact record until all three stopped-state fields match. Do not run the 1-GPU and 2-GPU templates together. A stopped template retains disk and may incur storage charges, but it does not reserve its GPU.
+Both records reported `is_bid=false`. Start each template once while vacant, validate the GPU count from inside its container, then stop it and poll the exact record until all three stopped-state fields match. Do not run the 1-GPU and 2-GPU templates together. A stopped template retains disk and does not reserve its GPU.
+
+The owner GPU charge was zero on the owner's own host, but each retained 20 GB disk cost about $0.00556/hour on the client account. The Instances page warned that the stopped records could be deleted when the client balance reached zero. Maintain explicit client-credit headroom for every standby or destroy standbys that are no longer needed; owning the host does not make retained instance storage balance-free.
 
 Store the exact IDs, labels, machine association, GPU count, offer association, and raw state fields only in the private operations environment. The repository should contain placeholders and validation rules, never live identifiers.
 

@@ -368,7 +368,9 @@ outside interruptible paused; its disk retained
 outside interruptible resumes automatically if it again has priority
 ```
 
-A stopped instance preserves the owner's disk and continues to incur storage charges. It does not reserve a GPU. Restart still asks the scheduler for the GPU, so this design prevents a full tenant disk from blocking owner disk allocation but does not guarantee GPU availability or host-versus-tenant preemption. Fresh create/destroy remains a secondary path when no reusable ID is configured.
+A stopped instance preserves the owner's disk and continues to incur storage charges. It does not reserve a GPU. The live trial showed the owner's GPU charge at zero on its own host while each retained 20 GB disk cost about $0.00556/hour on the client side. Keep enough client credit to cover every standby: the Instances page warns that instances may be stopped or deleted when the client balance reaches zero, even though the same account owns the host. Do not rely on future host earnings arriving before that balance is consumed.
+
+Restart still asks the scheduler for the GPU, so this design prevents a full tenant disk from blocking owner disk allocation but does not guarantee GPU availability or host-versus-tenant preemption. Fresh create/destroy remains a secondary path when no reusable ID is configured.
 
 This differs from:
 

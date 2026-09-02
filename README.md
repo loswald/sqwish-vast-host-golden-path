@@ -91,7 +91,7 @@ After owner outputs are saved:
 
 Release reads the recorded mode and repeats the exact ID, machine, and label checks under a lock. For `precreated`, it offers only `stop instance`, proves the same safe stopped-state tuple, keeps the instance and disk, and archives the session state. For `fresh-created`, it offers only guarded destroy and refuses any ID currently configured as `VAST_OWN_INSTANCE_ID`. It passes the CLI's noninteractive `--yes` after its own typed confirmation and archives state after either JSON `success: true` or matching absence from both `show instance` and `show instances`.
 
-Stopped instances continue to incur storage charges, their disk size cannot be changed, and they do not reserve a GPU. Restart is still scheduler-dependent; pre-creating protects disk capacity, not GPU availability or guaranteed preemption.
+Stopped instances continue to incur client-side storage charges, their disk size cannot be changed, and they do not reserve a GPU. Keep enough client credit to prevent the platform deleting them at zero balance. Restart is still scheduler-dependent; pre-creating protects disk capacity, not GPU availability or guaranteed preemption.
 
 To stop accepting new rentals:
 
