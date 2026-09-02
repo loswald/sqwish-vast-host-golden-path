@@ -13,6 +13,16 @@ Keep this file free of IP addresses, account names, machine IDs, instance IDs, A
 - Interruptible floor rationale:
 - On-demand deterrent rationale:
 
+## Vacant-host self-test
+
+- First-run image pull/build duration:
+- System requirements passed:
+- ResNet/ECC/NCCL markers passed:
+- CPU/GPU stress reached `DONE`:
+- Peak temperature/power/VRAM:
+- Test container removed and GPU returned idle:
+- Transient log-poll message, if any:
+
 ## Before reclaim
 
 - Reliability score:

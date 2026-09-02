@@ -4,6 +4,8 @@ This folder is a conservative operating kit for a **dedicated, physically owned*
 
 Read [`docs/RUNBOOK.md`](docs/RUNBOOK.md) before touching a host.
 
+For the SCAN 4x RTX PRO 6000 candidate, use the staged technical checklist in [`docs/SCAN-4X-RTX-PRO-6000-PILOT.md`](docs/SCAN-4X-RTX-PRO-6000-PILOT.md) before installation or listing.
+
 ## Hard limitation
 
 Vast has no documented host switch that makes a listing strictly interruptible-only. A high on-demand price can discourage outside on-demand rental but cannot prevent it. If an outside on-demand or reserved contract appears, the owner workload must wait and the locked contract must be honored.
@@ -22,6 +24,7 @@ Unlisting, stopping the daemon, restarting Docker, powering off, killing contain
 
 - `docs/RUNBOOK.md` — complete setup, listing, reclaim, maintenance, payout, cleanup, and troubleshooting guide.
 - `docs/TRIAL-NOTES.md` — sanitized trial record template.
+- `docs/SCAN-4X-RTX-PRO-6000-PILOT.md` — one-week technical qualification and staged 4-GPU reclaim plan for the published SCAN candidate.
 - `scripts/preflight-host.sh` — read-only local requirement checks.
 - `scripts/monitor-machine.sh` — read-only Vast/local health snapshots.
 - `scripts/reclaim-gpu.sh` — guarded owner on-demand creation.
