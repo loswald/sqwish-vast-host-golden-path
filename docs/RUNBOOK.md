@@ -350,7 +350,61 @@ vastai set min-bid <MACHINE_ID> --price <NEW_MINIMUM_BID_PER_GPU_HOUR>
 
 This changes future bid acceptance. Do not use it to evict an existing renter.
 
+### Required controlled second-account reclaim trial
+
+Do not wait for an unknown public renter to validate reclaim. Vast's official hosting guide documents a separate client account on a different email as a supported way to test the full client experience. Prepare that account before exposing the offer:
+
+1. Keep the machine in the dedicated host account. Stage an official Host Job below the planned client bid, and create the stopped owner on-demand test standby while vacant.
+2. Create and authenticate a separate operator-controlled client account, add enough credit for the short test, and prepare its exact-machine CLI search/create commands.
+3. For the first test, set `min_chunk` to the full GPU count and have the controlled client request every exposed GPU. Use the freshly sampled P99 interruptible price for the acquisition window rather than a cheap attraction price. A percentile price is a deterrent, not an allowlist.
+4. List only when the client command is ready. Search by exact machine ID, create the controlled interruptible instance immediately with a bid above the reviewed floor, and verify the returned instance belongs to the intended machine and has the full GPU allocation.
+5. Unlist the machine as soon as that controlled contract is proven running. Unlisting now blocks any further contracts while preserving the controlled test contract.
+6. First raise the Host Job above the controlled client bid, measure platform pause/reclaim, then lower it and measure client auto-resume. Record how many GPUs the Host Job actually receives; its API has no explicit GPU-count parameter.
+7. Separately start the exact pre-created owner on-demand test standby, measure platform pause/reclaim, stop it, and measure controlled-client auto-resume.
+8. Destroy the controlled client instance, clear its storage, and keep the host unlisted while reviewing the evidence.
+
+There remains a short race between listing and controlled acquisition because Vast exposes no documented private or account-allowlisted offer. Abort and honor the contract if any unexpected client wins first. On a sliced multi-GPU test, fill every exposed slice from controlled client accounts before unlisting; never leave an advertised GPU available to an unknown client.
+
+Follow the complete schedule, metrics, aborts, pass thresholds, delayed rating checks, and four-GPU adaptation in [`CONTROLLED-2H-2XA100-TRIAL.md`](CONTROLLED-2H-2XA100-TRIAL.md).
+
 ## Safe owner reclaim
+
+### Owner-workload policy status
+
+Vast's Verification Stages guide says hosts must run their own workloads through Host **Jobs**. The current CLI command is `set defjob`; the console calls this Create Job. A Host Job is a persistent low-priority background bid. It does not have an owner-only priority class:
+
+```text
+controlled interruptible bid B running
+        │
+        │ set Host Job value above B
+        ▼
+controlled interruptible paused; Host Job should run
+        │
+        │ lower Host Job value below B
+        ▼
+controlled interruptible resumes if it again has priority
+```
+
+Create or update the job with the image and value already reviewed for that exact machine:
+
+```bash
+vastai set defjob <MACHINE_ID> \
+  --price_gpu <OWNER_VALUE_PER_GPU_HOUR> \
+  --price_inetu 0 \
+  --price_inetd 0 \
+  --image <OWNER_WORKLOAD_IMAGE> \
+  --args <OWNER_ARGUMENTS>
+```
+
+`--args` consumes the remainder of the command and must be last. Inspect `vastai show machines --raw` for the default-job fields. `remove defjob` deletes the job; it is not a pause/release control and storage persistence across deletion is undocumented.
+
+The Host Job API has no GPU-count parameter. Do not assume one job on a multi-GPU machine gets one GPU or every GPU. The two-hour trial must measure `CUDA_VISIBLE_DEVICES` and `nvidia-smi -L`, and must abort on overlapping assignment.
+
+Host Jobs cannot preempt outside on-demand or reserved rentals. They can only win over lower interruptible bids. Vast does not promise zero rating impact for an operator-triggered bid change, so keep the same immediate and delayed rating checks.
+
+### Experimental on-demand reclaim
+
+Vast separately documents a free own-machine on-demand instance for testing. It has stronger deterministic priority than a Host Job because on-demand outranks every interruptible bid. The following pre-created standby workflow is therefore retained for the controlled reclaim experiment and tooling validation. Do not present it as the approved ongoing owner-workload policy until Vast confirms that use in writing.
 
 ### What platform preemption means
 
@@ -396,7 +450,7 @@ The helpers use mode-tagged state and an atomic `reclaim.lock/` under `VAST_STAT
 
 The official CLI only shows the current account's instances. A host operator must also inspect the host's Machines/Contracts view; do not assume `vastai show instances` reveals outside clients.
 
-A same-account interruptible instance is not a valid substitute for the outside renter in this test. In the controlled September 2026 trial, Vast rejected an owner on-demand create on the same offer while that account's interruptible instance occupied the GPU with HTTP 400, error 3763 (`GPU conflict`). This established only that self-rentals conflict; it did not exercise host priority over a genuine outside interruptible contract. Wait for a real outside interruptible rental before declaring reclaim validated.
+A same-account interruptible instance is not a valid substitute for the client side of this test. In the controlled September 2026 trial, Vast rejected an owner on-demand create on the same offer while that account's interruptible instance occupied the GPU with HTTP 400, error 3763 (`GPU conflict`). Use the separately authenticated, operator-controlled client account described above. It exercises a distinct client contract without accepting an unknown workload.
 
 ### Prepare the reusable owner standby while vacant
 
@@ -501,7 +555,7 @@ Then observe the outside interruptible instance. Vast documents automatic resume
 
 Call the controlled trial successful only if:
 
-- the interruptible renter is a genuine outside contract, not a same-account self-bid;
+- the interruptible renter is the exact separately authenticated controlled-client contract, not a same-account self-bid or unknown public client;
 - owner on-demand starts without manual host/container intervention;
 - outside bid is platform-paused with data retained;
 - outside bid auto-resumes after owner instance stop or destruction;
@@ -655,7 +709,7 @@ Do not format or repurpose the client-storage disk until the unlist/contract/vol
 | Self-test fails ports | Range not reachable end-to-end, TCP/UDP mismatch, CGNAT, or too few ports | Fix router and host firewall; test externally; provide at least five/GPU (100/GPU recommended). |
 | Machine does not appear in normal search | Search results show only a subset | Use `vastai search offers 'machine_id=<MACHINE_ID> verified=any'`. |
 | On-demand outside rental appears | High price discouraged but did not prohibit it | Abort owner reclaim and honor the contract through its end date. Current docs have no strict interruptible-only switch. |
-| Owner on-demand create returns HTTP 400 / error 3763 `GPU conflict` during a same-account self-bid test | Vast will not use that account's on-demand instance to preempt its own interruptible instance on the occupied GPU | Destroy only the same-account test instance through its verified ID if one exists. Mark the preemption trial invalid and wait for a genuine outside interruptible contract; do not alter the renter container or host services. |
+| Owner on-demand create returns HTTP 400 / error 3763 `GPU conflict` during a same-account self-bid test | Vast will not use that account's on-demand instance to preempt its own interruptible instance on the occupied GPU | Destroy only the same-account test instance through its verified ID if one exists. Mark the trial invalid, then repeat only through the documented separate controlled client account; do not accept an unknown renter or alter renter containers/host services. |
 | Precreated reclaim refuses to start | Exact ID/machine/label/on-demand/GPU/offer check failed, the record did not report `actual_status=created|exited|stopped` with `intended_status=stopped` and `cur_state=stopped`, or the standby expired | Do not clear the ID or fall back to create while rented. Resolve the exact mismatch; replace the standby only while safely vacant. |
 | `start instance` or `stop instance` prints success-like text but state does not change | CLI 1.5.6 does not provide authoritative machine-readable start/stop results, or scheduling/stop is delayed | Trust only bounded polling of the exact `show instance` record. A start requires `running/running/running`; a stop requires the explicit non-running actual-state allowlist plus both stopped control fields. Run guarded release to stop a stuck start and retain state if the appropriate proof fails. |
 | Bid renter remains running after owner create | Wrong offer/machine, owner creation stopped, or scheduler did not allocate it | Do not touch renter. Inspect owner create result/status and machine contracts; destroy only a failed owner instance and investigate. |

@@ -1,0 +1,193 @@
+# Controlled two-hour 2xA100 reclaim trial
+
+This is the first end-to-end acceptance test for a dedicated physical Vast host. It exercises a real client contract while keeping the workload, client account, timing, and data under operator control.
+
+It must not run on infrastructure whose provider has not expressly approved third-party hosting. Vast exposes no documented private or account-allowlisted offer. The listing is public between publication and controlled acquisition, even at a very high price.
+
+## Questions the trial answers
+
+The trial measures, on one exact machine and current Vast scheduler version:
+
+- whether a separate controlled client can acquire all GPUs as one interruptible contract;
+- whether the official Host Job mechanism can outbid that interruptible, run owner work, and release it again;
+- whether a two-GPU owner on-demand self-test pauses the controlled client atomically;
+- whether the client resumes automatically with its checkpoint and disk intact;
+- whether two independent one-GPU clients can be reclaimed selectively and together;
+- reclaim, release, and resume latency;
+- host CPU, RAM, storage, network, thermal, and GPU overhead;
+- immediate and delayed observed reliability, verification, and report changes.
+
+It does not prove a universal reliability exemption, a scheduler SLA, safety for arbitrary tenant images, zero acquisition risk, or behavior on a different GPU topology. Repeat the relevant phases on the delivered 4x RTX PRO 6000 machine.
+
+## Official behavior and remaining gaps
+
+Vast documents two supported ways to test an operator's own machine: a separate client account for the full client experience, and a free own-machine instance from the host account. It also documents that on-demand instances outrank interruptibles, lower interruptible bids pause, and paused interruptibles resume automatically when priority returns.
+
+Vast's Verification Stages guide says ongoing owner workloads must use Host **Jobs**. The current CLI implements this as `vastai set defjob`: a low-priority background bid on the host machine. A Host Job may win against a lower client bid, but cannot displace on-demand or reserved work. The Host Job API exposes no explicit GPU-count parameter, so its atomic two-GPU behavior is a measured result rather than an assumption.
+
+A host-account, own-machine on-demand instance is documented for testing and gives deterministic priority over interruptibles. Until Vast confirms that ongoing team work may use that route, treat it as a reclaim experiment rather than the production policy.
+
+Sources:
+
+- [Hosting Overview and own-machine testing](https://docs.vast.ai/host/hosting-overview)
+- [Verification Stages and Host Jobs](https://docs.vast.ai/host/verification-stages)
+- [Interruptible priority and automatic resume](https://docs.vast.ai/guides/instances/choosing/instance-types)
+- [`set defjob`](https://docs.vast.ai/cli/reference/set-defjob)
+- [`remove defjob`](https://docs.vast.ai/cli/reference/remove-defjob)
+- [List-machine API fields](https://docs.vast.ai/api-reference/machines/list-machine)
+
+## Hard gates
+
+Do not start the two-hour clock until all gates pass:
+
+1. The host is dedicated physical hardware under operator control and hosting is permitted.
+2. Docker mode is in use; VM mode is off.
+3. The machine is vacant, verified as expected, self-test passes, and there are no reports or red machine errors.
+4. The host and controlled client use distinct Vast accounts. The controlled client is authenticated, funded, and ready on the exact-machine search before listing.
+5. The controlled client image is operator-reviewed and pinned by digest where practical. It makes no unrelated outbound connections.
+6. The image records one-second UTC heartbeats and a monotonic sequence to persistent instance disk, fsyncs a checkpoint every five seconds, and loads every visible GPU with a bounded CUDA test.
+7. The physical Docker pool is XFS with project quotas and a hard 250 GB boundary. Root has at least 20 GB free. Docker storage is below 70 percent used and has at least 50 GB free before every phase.
+8. A 2-GPU owner on-demand test instance is created on the exact machine while vacant, proven to see both GPUs, then stopped. Record its exact instance ID, offer ID, label, machine ID, and safe stopped-state tuple.
+9. The owner Host Job definition is staged at a value below the controlled-client bid. Its image logs `CUDA_VISIBLE_DEVICES`, `nvidia-smi -L`, heartbeat, and checkpoint state.
+10. Live one-second host telemetry, 2-5 second Vast state sampling, and two-second external client health checks are already collecting.
+11. Capture raw baseline reliability, expected reliability, verification, reports, offer and contract inventory, daemon status, GPU UUID/ECC/Xid/temperature/power/clocks, disk, RAM, CPU, and network counters.
+12. An independent stop/cleanup backstop is active.
+
+## Listing and controlled acquisition
+
+For the full-machine phase, set `min_chunk=2`, `discount_rate=0`, `vol_size=0`, and a fixed end epoch at the trial deadline. `vol_size=0` prevents a separate volume offer; it does not cap instance disks. Specify a 10 GB client disk explicitly and rely on the physically bounded Docker pool for the total cap.
+
+Use a freshly sampled **P99** interruptible floor for the few-second acquisition window. This is a deterrent only. It is not a private listing and does not prevent a stranger from winning the race.
+
+Representative listing shape:
+
+```bash
+vastai list machine "$MACHINE_ID" \
+  --price_gpu "$ON_DEMAND_DETERRENT" \
+  --price_min_bid "$P99_INTERRUPTIBLE_FLOOR" \
+  --price_disk "$DISK_PRICE" \
+  --price_inetu "$UPLOAD_PRICE" \
+  --price_inetd "$DOWNLOAD_PRICE" \
+  --discount_rate 0 \
+  --min_chunk 2 \
+  --end_date "$FIXED_END_EPOCH" \
+  --vol_size 0
+```
+
+The controlled client must query the exact machine ID, exact two-GPU bid offer, and create immediately with `--cancel-unavail`, a unique label, a 10 GB disk, and a bid above the P99 floor. The CLI's `--bid_price` is per machine, not per GPU.
+
+As soon as the exact controlled instance is proven running on the intended machine with both GPUs, unlist the machine. Official Vast documentation says unlisting prevents new contracts while existing contracts continue under their original terms.
+
+Abort if acquisition does not complete promptly, lands on another machine, exposes the wrong GPU count, or any unexpected contract appears. Unlist immediately. Do not interfere with an unexpected contract; honor its fixed end date.
+
+## Two-hour schedule
+
+| Time | Action and required evidence |
+|---|---|
+| 00:00-00:03 | List with `min_chunk=2`; controlled client acquires the exact 2-GPU interruptible; verify client, machine, offer, bid, GPU count, image, label, and disk; unlist and prove no offer remains. |
+| 00:03-00:08 | Warm the controlled workload. Prove two GPU UUIDs, bounded CUDA load, heartbeat, fsynced checkpoint, and a clean NCCL/all-reduce result. |
+| 00:08-00:18 | **Host Job reclaim 1.** Raise the staged Host Job above the client bid. Measure client pause and Host Job start; inspect how many GPUs the Host Job sees. Run five minutes, lower it below the client bid, and measure client auto-resume and checkpoint recovery. |
+| 00:18-00:28 | **Host Job reclaim 2.** Repeat once. Stop if Host Job GPU allocation is ambiguous, either side overlaps on a GPU, or any state transition is uncertain. |
+| 00:28-00:38 | **Atomic 2-GPU on-demand reclaim 1.** Start the exact stopped owner test instance. Measure controlled-client pause and owner running. Run the known two-GPU owner job for five minutes; stop the exact owner instance and measure client resume. |
+| 00:38-00:48 | **Atomic 2-GPU on-demand reclaim 2.** Repeat once using only the exact recorded instance. Do not create a replacement while occupied. |
+| 00:48-00:55 | Full-machine loaded soak. Verify checkpoint sequence, no corruption, no Xid/ECC/OOM, no daemon gap, healthy storage/network, and unchanged immediate machine status. |
+| 00:55-01:00 | Export controlled-client evidence, destroy its exact contract, prove both GPUs idle, and reconcile the exact host contract view. |
+| 01:00-01:05 | Relist with `min_chunk=1`. Sequentially acquire two exact one-GPU interruptible contracts from the controlled client. Re-query after the first because available offer IDs may change. Unlist only after both are proven running. |
+| 01:05-01:12 | Warm both clients. Prove each sees one exclusive physical GPU, independent heartbeat/checkpoint state, and no MIG assumption. |
+| 01:12-01:22 | **Selective one-GPU reclaim.** Start the exact one-GPU owner test if a separately proven standby exists. Exactly one controlled client should pause while its sibling remains healthy. Stop owner and verify resume. Otherwise record this phase as deferred rather than improvising a create. |
+| 01:22-01:32 | **Full reclaim over slices.** Start the exact 2-GPU owner test instance. Both one-GPU clients should pause before owner runs. Stop owner and verify both resume, recording pause and resume skew. |
+| 01:32-01:42 | Repeat full reclaim over slices once. |
+| 01:42-01:50 | Final loaded soak. Capture client integrity, telemetry, reports, raw reliability, expected reliability, and verification. |
+| 01:50-01:56 | Export evidence; stop any owner test instance; destroy both exact controlled-client contracts. |
+| 01:56-01:59 | Prove unlisted, no volume offer, no active contract, GPUs idle, and storage healthy. Reconcile expired/deleted contracts only after vacancy is proven. |
+| 01:59-02:00 | Preserve logs, revoke the temporary controlled-client API key, and leave the machine unlisted. |
+
+## Live evidence
+
+Collect three independent layers:
+
+- **Host every second:** GPU utilization, VRAM, temperature, power, clocks, ECC/Xid; CPU; available RAM and swap; Docker-pool capacity and IO; NIC throughput, errors, and drops.
+- **Vast every 2-5 seconds:** exact instance state tuples, host job fields, offer and contract inventory, reliability, expected reliability, verification, and reports.
+- **Controlled client every two seconds:** health response, GPU UUID visibility, heartbeat sequence, checkpoint sequence, and reconnect gaps.
+
+Vast Machine Metrics samples hardware frequently and container state at roughly 15-second intervals, but uploads can lag. Use it as corroboration rather than the live controller.
+
+## Operational pass thresholds
+
+Every executed cycle must satisfy:
+
+- only the exact controlled contracts appear;
+- expected owner work reaches running within 30 seconds;
+- no owner/client overlap occurs on a GPU;
+- the controlled client automatically runs again within 60 seconds of owner release;
+- its disk checkpoint is intact with no more than five seconds of uncheckpointed work;
+- an unaffected one-GPU sibling has no health gap over five seconds;
+- no daemon disconnect, host outage, Xid, uncorrectable ECC, OOM, storage exhaustion, persistent throttle, network error, report, red machine error, immediate reliability decrease, or verification change occurs.
+
+The 30- and 60-second limits are internal acceptance targets. Vast publishes no reclaim or resume SLA.
+
+## Immediate aborts
+
+Stop further mutations, unlist, and preserve evidence if:
+
+- an unknown client or contract appears;
+- an on-demand or reserved outside contract appears;
+- a controlled create lands on the wrong machine or GPU count;
+- all intended slices are not filled promptly;
+- owner identity or stopped-state proof is incomplete;
+- an owner start remains scheduling after 30 seconds;
+- GPU ownership overlaps;
+- the daemon or host disconnects;
+- reliability, verification, reports, hardware, storage, or network health worsens;
+- checkpoint integrity fails.
+
+Never respond by killing a client container, stopping Docker/Vast, rebooting, powering off, or using maintenance as an eviction control.
+
+## Rating observation window
+
+Capture the same raw reliability, expected reliability, verification, reports, and notification state:
+
+- immediately before the test;
+- after every reclaim/release cycle;
+- at the end of the test;
+- two hours later;
+- 24 hours later;
+- seven days later.
+
+The result may say “no observed change through seven days.” It must never claim a universal no-penalty guarantee unless Vast provides that guarantee in writing.
+
+## Four-GPU adaptation
+
+On the delivered 4x RTX PRO 6000 machine, repeat rather than extrapolate:
+
+1. qualify driver/CUDA, topology, PCIe, four-GPU NCCL, thermals, power, storage, and network;
+2. acquire one controlled four-GPU interruptible with `min_chunk=4`, unlist, and run two full-node cycles;
+3. relist with `min_chunk=1`, acquire all four one-GPU slices from the controlled client, and unlist;
+4. test one-GPU owner reclaim, two-GPU owner reclaim, then four-GPU owner reclaim twice;
+5. record which client contracts pause, transition skew, sibling continuity, and whether a four-GPU owner request assembles the entire machine;
+6. keep a 350-400 GB physically bounded Docker pool for four minimal test disks, image cache, checkpoints, and margin.
+
+Sequentially filling four slices extends the public acquisition window. If zero unknown exposure is required, obtain a private-offer mechanism in writing from Vast before running that phase.
+
+## Trial record
+
+Fill this table with sanitized evidence only:
+
+| Field | Result |
+|---|---|
+| Test date/time and Vast CLI version | Pending |
+| Hardware/topology | Pending |
+| Baseline reliability / expected reliability / verification | Pending |
+| P99 sample size and computed floor | Pending |
+| Public acquisition window | Pending |
+| Exact controlled contracts only | Pending |
+| Host Job visible GPU count | Pending |
+| Host Job reclaim/resume timings | Pending |
+| 2-GPU on-demand reclaim/resume timings | Pending |
+| Selective one-GPU result | Pending |
+| Full reclaim over slices result | Pending |
+| Checkpoint/data integrity | Pending |
+| Host overhead and health | Pending |
+| End-of-test reliability / verification / reports | Pending |
+| +2h / +24h / +7d observation | Pending |
+| Final conclusion and open questions | Pending |

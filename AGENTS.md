@@ -8,12 +8,13 @@ This repository covers a dedicated physical Vast.ai GPU host under full operator
 1. Current official documentation exposes no strictly interruptible-only host switch. A high on-demand price is a deterrent, not a guarantee.
 2. An outside on-demand or reserved contract has high priority and must be honored through its locked end date.
 3. Unlisting blocks new contracts only. It never changes an existing contract.
-4. The preferred owner reclaim path starts an exact, pre-created, stopped on-demand instance. Release stops and retains it so its disk remains allocated. If no reusable ID is configured, fresh create/destroy remains available. Neither path uses `--bid_price`.
+4. Vast documents Host Jobs (`set defjob`) as the production mechanism for owner workloads. A Host Job is a background bid and can only reclaim from lower interruptible bids. The exact, pre-created, stopped on-demand instance is a stronger controlled reclaim experiment, but do not call it the production policy until Vast confirms ongoing owner use is permitted. Release stops and retains that exact test instance. Neither on-demand path uses `--bid_price`.
 5. Never reclaim by stopping Vast/Docker, rebooting, powering off, killing a container, changing minimum bid, or scheduling maintenance.
 6. Vast documents automatic resume when an interruptible regains priority. The combined owner-reclaim behavior is an evidence-backed inference until a controlled trial passes.
 7. Vast does not explicitly guarantee zero rating impact. Always measure reliability/verification before, during, immediately after, and after a delayed platform update.
-8. A same-account interruptible instance cannot validate outside-renter preemption. The observed owner on-demand attempt was rejected with HTTP 400/error 3763 (`GPU conflict`); wait for a genuine outside interruptible contract.
+8. A same-account interruptible instance cannot validate outside-renter preemption. The observed owner on-demand attempt was rejected with HTTP 400/error 3763 (`GPU conflict`). Vast officially documents testing through a separate client account on another email. Use that controlled account for the first reclaim trial: pre-authenticate and fund it, acquire the exact full-machine interruptible offer immediately, then unlist before testing owner preemption. A high price reduces the acquisition race but is not access control.
 9. A vacant current-state card does not prove that no rental occurred. The cloud-VM incident in `docs/INCIDENT-CLOUD-MINER.md` involved an approximately four-minute workload that a five-minute monitor missed. Preserve event-level contract and egress logs, and treat any unexplained earnings as evidence requiring investigation.
+10. The first valid reclaim evidence must follow `docs/CONTROLLED-2H-2XA100-TRIAL.md`: one host account, one separate controlled client account, a P99 acquisition window, immediate unlisting after the exact full-machine contract is proven, Host Job cycles, owner on-demand test cycles, and delayed rating checks.
 
 ## Before acting
 

@@ -17,7 +17,7 @@ These are the verified, sanitized facts:
 - The VM downloaded roughly 136 MB immediately before detection and contacted a known mining-pool endpoint.
 - The later host inspection found the cached tag `spacepirateman/giga-cpu-miner:latest`, but no running or retained container.
 - The current public image behind that tag contains XMRig and is configured to use about 80 percent of available CPU threads. Its current registry digest was not proven to be the deleted local digest, so it is corroborating evidence rather than an exact artifact match.
-- Vast showed about one cent of GPU earnings. At the listed L4 floor, the unrounded earnings corresponded to about 4.25 minutes, closely matching the provider's detection window.
+- Vast recorded GPU rental earnings on the incident date and attributed them to the L4. The known owner self-test and standby contracts were free and did not produce those earnings, supporting a separate paid rental. Rounded earnings are not used to infer an exact duration.
 - No unknown cloud principal, new service-account key, IAM change, or control-plane action was found. The affected VM had no attached cloud service account.
 - The official Vast self-test had run about 2.5 hours earlier with a different `vastai/test` image. It was not the immediate trigger.
 
@@ -33,7 +33,7 @@ The same limitation applies to the Host Machines card and `show machine`: curren
 
 1. Use only operator-owned physical hardware or a provider that has given prior written approval for third-party hosting and the workloads tenants may run. Do not repeat this experiment on an unapproved cloud VM.
 2. Treat a public raw-compute renter as untrusted code execution. Interruptibility controls scheduling; it does not control what the renter executes.
-3. Never use a very cheap public listing merely to obtain a fast test renter. Use a controlled second account or a private test path if the platform and infrastructure provider expressly permit it.
+3. Never use a very cheap public listing merely to obtain a fast test renter. Vast officially documents testing through a separate client account on a different email. Pre-authenticate and fund that controlled account, stage an exact-machine create, list at a high reviewed price, acquire every exposed GPU immediately, and unlist as soon as the controlled contract exists. This minimizes but does not eliminate the race before acquisition.
 4. Record event-level rental history. Polling must not be the sole evidence of vacancy. If event streaming is unavailable, poll materially faster than the shortest possible contract and reconcile every earnings delta.
 5. Enable network-flow, firewall, container-event, and guest logs before exposure. Retain exact image digests and container create/start/destroy events outside the host.
 6. Apply egress controls appropriate to the host policy. If arbitrary tenant networking is required, accept that mining and other prohibited workloads cannot be reliably prevented at the infrastructure layer.

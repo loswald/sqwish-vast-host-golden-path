@@ -8,6 +8,8 @@ Read [`docs/RUNBOOK.md`](docs/RUNBOOK.md) before touching a host.
 
 The completed two-A100 setup, hard storage cap, price display, vacant-host checks, and still-pending outside-renter reclaim evidence are recorded in [`docs/A100-2X-LIVE-TRIAL.md`](docs/A100-2X-LIVE-TRIAL.md).
 
+Use [`docs/CONTROLLED-2H-2XA100-TRIAL.md`](docs/CONTROLLED-2H-2XA100-TRIAL.md) for the exact two-hour separate-client, Host Job, owner-preemption, slicing, rating-observation, and cleanup procedure.
+
 For the SCAN 4x RTX PRO 6000 candidate, use the staged technical checklist in [`docs/SCAN-4X-RTX-PRO-6000-PILOT.md`](docs/SCAN-4X-RTX-PRO-6000-PILOT.md) before installation or listing.
 
 Use [`docs/ECONOMICS.md`](docs/ECONOMICS.md) for the current ex-VAT 18-period model, exact `RTX PRO 6000 WS` comparables, and transparent three-researcher usage patterns. Recalculate rather than preserving its dated market snapshot.
@@ -16,7 +18,9 @@ Use [`docs/ECONOMICS.md`](docs/ECONOMICS.md) for the current ex-VAT 18-period mo
 
 Vast has no documented host switch that makes a listing strictly interruptible-only. A high on-demand price can discourage outside on-demand rental but cannot prevent it. If an outside on-demand or reserved contract appears, the owner workload must wait and the locked contract must be honored.
 
-The preferred reclaim path reserves the owner's disk before any tenant arrives:
+Vast's documented production mechanism for owner workloads is a Host Job (`set defjob`). It is a background bid: raising it above an interruptible client should pause that client, and lowering it should let the client resume. It cannot preempt on-demand or reserved work, and the current API exposes no explicit GPU-count control.
+
+The stronger stopped owner on-demand path remains a controlled reclaim experiment until Vast confirms it is acceptable for ongoing team workloads. It reserves the owner's disk before any tenant arrives:
 
 1. While the host is vacant, the owner creates one on-demand instance, gives it a dedicated owner label, and stops it after setup.
 2. Outside interruptible runs; the stopped owner instance keeps its disk but does not reserve a GPU.
@@ -33,6 +37,7 @@ Unlisting, stopping the daemon, restarting Docker, powering off, killing contain
 - `docs/RUNBOOK.md` — complete setup, listing, reclaim, maintenance, payout, cleanup, and troubleshooting guide.
 - `docs/TRIAL-NOTES.md` — sanitized trial record template.
 - `docs/A100-2X-LIVE-TRIAL.md` — evidence from the live two-A100 storage, pricing, qualification, and standby trial, with the outside-renter reclaim result kept explicitly pending.
+- `docs/CONTROLLED-2H-2XA100-TRIAL.md` — exact two-hour controlled-client test for Host Job and owner on-demand reclaim, pause/resume, slicing, rating observation, and cleanup.
 - `docs/SCAN-4X-RTX-PRO-6000-PILOT.md` — one-week technical qualification and staged 4-GPU reclaim plan for the published SCAN candidate.
 - `docs/ECONOMICS.md` — SCAN commitment, Vast price/fill, and research-team allocation scenarios with primary sources.
 - `docs/ADAPTIVE-PRICING.md` — guarded P10 interruptible-floor sampling, reliability adjustment, hard bounds, and exact-machine apply checks.
