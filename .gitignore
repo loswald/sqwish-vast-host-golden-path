@@ -1,0 +1,19 @@
+.env
+*.log
+*.tmp
+*.state
+*.jsonl
+state/
+artifacts/
+active-reclaim.json
+pending-reclaim.json
+reclaim.lock/
+snapshots/
+vast_host_install.log
+vast_host_uninstall.log
+
+# Never commit CLI credentials or copied installer commands.
+vast_api_key
+install
+install-wizard
+uninstall
