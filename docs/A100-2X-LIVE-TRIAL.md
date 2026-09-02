@@ -145,7 +145,25 @@ vastai list machine <MACHINE_ID> \
 
 The live search result confirmed the current conversion: the renter saw four-thirds of the host setting, while the host floor remained the amount the host intended to earn. Do not subtract another 25% from the host figure when modelling revenue. Always verify both the host record and renter-visible search result after listing; do not assume the conversion or unit labels will remain unchanged.
 
+Those renter-visible figures came from **one-GPU slice offers** because this listing used `min_chunk=1`. For a multi-GPU bid offer, raw search field `min_bid` is the total for the whole offered machine per hour, not a per-GPU amount. Convert a sampled multi-GPU machine total back to host `price_min_bid` with the live surcharge factor and GPU count before relisting; do not multiply `min_bid` by GPU count.
+
 The listing initially used a $0.26 host floor, about $0.3467 renter-facing. With the machine still vacant, it was reduced to $0.225 host-side and verified at exactly $0.3000 in renter search. These were quick-fill trial prices, not a production claim that bandwidth covers provider egress or that $0.225 is a durable market floor. Re-sample comparable A100 interruptible offers before each future listing and reprice only future acceptance; changing the minimum bid does not evict an existing contract.
+
+## Controlled follow-up evidence on the full two-GPU bundle
+
+A same-day follow-up prepared the controlled two-account reclaim path without admitting an unknown renter. The machine stayed unlisted except for the brief owner-standby creation window, when its on-demand price was set to a deterrent and its interruptible floor was above the sampled market. No outside contract appeared.
+
+The current official self-test again completed successfully in relaxed mode: system checks, ResNet18, ECC, two-GPU NCCL, and the simultaneous 60-second CPU/GPU burn all passed. Vast destroyed the temporary test instance and unlisted the machine. Reliability remained **0.5999925**, verification remained **unverified**, and the machine reported no error or renter report. The self-test result callback returned `Invalid User`, so the local test evidence is authoritative for hardware health but does not prove a platform verification update.
+
+A new full-node owner on-demand instance then ran the official Vast test image with `gpu_burn 15` in a loop. Inside the container it saw both physical A100 UUIDs. Host telemetry measured both GPUs at 100% utilization, about 36.3 GB VRAM each, roughly 300 W each, and 55-58°C. The burn reported zero errors and about 17.7-19.1 TFLOP/s per GPU. The owner instance stopped to the required tuple `actual_status=exited`, `intended_status=stopped`, `cur_state=stopped`; both GPUs returned to 0% utilization and 0 MiB allocated.
+
+That stopped owner record later disappeared before the controlled-client phase. The exact cause was not isolated: the host account had almost no client credit, the retained disk had a nonzero hourly charge, and a Host Job definition was added during the interval. Do not assume a free own-machine standby will persist. Fund the host account's client side, record the retained instance repeatedly, and prove it still exists immediately before admitting the controlled renter. If it disappears, abort rather than creating a replacement while occupied.
+
+The low-priority Host Job produced **two independent one-GPU bid records**, one for each physical GPU, rather than one atomic two-GPU job. With the machine unlisted and the job below the stored machine floor, both records remained inert at `actual_status=loading`, `intended_status=stopped`, `cur_state=unloaded`; no job container ran. This proves the current Host Job definition fans out per GPU on this host, but it does not yet prove selective preemption or automatic resume.
+
+The fresh comparable sample contained seven unique 2×A100-SXM4-40GB machines. Bid-offer `min_bid` values were whole-machine totals: **$0.80 minimum, $1.066667 median, and $1.20 P95/P99/maximum per 2-GPU machine-hour**. At the observed four-thirds renter surcharge, the matching host listing input is **$0.45/GPU-hour**, and a controlled client's `--bid_price` must be just above **$1.20 for the machine**. An earlier sampler mislabeled `min_bid` as per-GPU and doubled it; that calculation was wrong and has been removed from the runbook.
+
+The controlled outside-client cycle did not start because the separate client account remained unfunded. The machine was never opened at the final P99 floor, no unknown tenant was admitted, and no reclaim or rating-immunity conclusion follows from this attempt. Future runs must complete client authentication, payment, SSH key, reviewed image, and exact create command before the host listing window opens.
 
 ## Outside-renter reclaim test still required
 

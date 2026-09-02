@@ -90,7 +90,11 @@ marketplace-price to host-earned-price factor from:
 current machine min_bid_price / own bid offer min_bid
 ```
 
-This avoids assuming that the marketplace surcharge relationship is fixed. A
+This ratio is dimensionally valid here only because the helper deliberately
+requests **1-GPU** offers: host `min_bid_price` is per GPU-hour, while offer
+`min_bid` is the renter-facing total for the offered machine per hour. A future
+multi-GPU version must divide by GPU count explicitly. This avoids assuming
+that the marketplace surcharge relationship is fixed. A
 factor outside `0.50..1.05`, missing fields, conflicting owned slices, malformed
 JSON, or an empty response aborts the run.
 

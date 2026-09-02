@@ -59,12 +59,20 @@ For the full-machine phase, set `min_chunk=2`, `discount_rate=0`, `vol_size=0`, 
 
 Use a freshly sampled **P99** interruptible floor for the few-second acquisition window. This is a deterrent only. It is not a private listing and does not prevent a stranger from winning the race.
 
+Do not mix the two price units. In a `search offers --type bid` response, `min_bid` is the renter-facing **total for the whole offered machine per hour**. Host `list machine --price_min_bid` and the machine record's `min_bid_price` are host-earned **per GPU-hour**. The CLI's client `--bid_price` is again the whole-machine hourly total. With the currently observed 25% marketplace surcharge, convert a sampled renter total to the host listing input as:
+
+```text
+host price_min_bid per GPU-hour = renter machine-total P99 * 0.75 / offered GPU count
+```
+
+Derive and verify the live conversion from the exact relisted offer instead of assuming 0.75 forever. For example, a $1.20 2-GPU renter-total P99 maps to a $0.45/GPU-hour host floor; the controlled client's machine-total bid must exceed $1.20. Multiplying the raw `min_bid` by the GPU count double-counts the GPUs and can make the controlled bid fail to clear its own listing.
+
 Representative listing shape:
 
 ```bash
 vastai list machine "$MACHINE_ID" \
   --price_gpu "$ON_DEMAND_DETERRENT" \
-  --price_min_bid "$P99_INTERRUPTIBLE_FLOOR" \
+  --price_min_bid "$HOST_PER_GPU_FLOOR_DERIVED_FROM_P99" \
   --price_disk "$DISK_PRICE" \
   --price_inetu "$UPLOAD_PRICE" \
   --price_inetd "$DOWNLOAD_PRICE" \
@@ -74,7 +82,7 @@ vastai list machine "$MACHINE_ID" \
   --vol_size 0
 ```
 
-The controlled client must query the exact machine ID, exact two-GPU bid offer, and create immediately with `--cancel-unavail`, a unique label, a 10 GB disk, and a bid above the P99 floor. The CLI's `--bid_price` is per machine, not per GPU.
+The controlled client must query the exact machine ID, exact two-GPU bid offer, verify that its renter-facing `min_bid` equals the sampled machine-total floor, and create immediately with `--cancel-unavail`, a unique label, a 10 GB disk, and a machine-total bid above that value.
 
 As soon as the exact controlled instance is proven running on the intended machine with both GPUs, unlist the machine. Official Vast documentation says unlisting prevents new contracts while existing contracts continue under their original terms.
 
@@ -175,19 +183,19 @@ Fill this table with sanitized evidence only:
 
 | Field | Result |
 |---|---|
-| Test date/time and Vast CLI version | Pending |
-| Hardware/topology | Pending |
-| Baseline reliability / expected reliability / verification | Pending |
-| P99 sample size and computed floor | Pending |
-| Public acquisition window | Pending |
-| Exact controlled contracts only | Pending |
-| Host Job visible GPU count | Pending |
+| Test date/time and Vast CLI version | 2 September 2026; CLI 1.5.6 |
+| Hardware/topology | 2× A100-SXM4-40GB; 300 GB/s advertised NVLink; two-GPU NCCL passed |
+| Baseline reliability / expected reliability / verification | 0.5999925 / unavailable / unverified; no reports or machine error |
+| P99 sample size and computed floor | Seven unique 2-GPU machines; $1.20 renter machine-total P99; $0.45 host/GPU-hour at the observed conversion |
+| Public acquisition window | Final P99 window not opened because the controlled client funding gate failed |
+| Exact controlled contracts only | No outside contract was admitted; full controlled-client proof remains pending |
+| Host Job visible GPU count | Definition produced two inert one-GPU bid records; running visibility remains pending |
 | Host Job reclaim/resume timings | Pending |
-| 2-GPU on-demand reclaim/resume timings | Pending |
+| 2-GPU on-demand reclaim/resume timings | Vacant-host owner job proved both GPUs and clean stop; tenant preemption/resume pending |
 | Selective one-GPU result | Pending |
 | Full reclaim over slices result | Pending |
-| Checkpoint/data integrity | Pending |
-| Host overhead and health | Pending |
-| End-of-test reliability / verification / reports | Pending |
+| Checkpoint/data integrity | Owner heartbeat/burn disk survived its run and clean stop; controlled-client continuity pending |
+| Host overhead and health | Both GPUs reached 100%, ~36.3 GB VRAM and ~300 W each, 55-58°C, zero burn errors; returned idle cleanly |
+| End-of-test reliability / verification / reports | 0.5999925 / unverified / no observed report or machine error before final cleanup |
 | +2h / +24h / +7d observation | Pending |
-| Final conclusion and open questions | Pending |
+| Final conclusion and open questions | Hardware, storage boundary, owner full-node job, P99 units, and Host Job fan-out proved. Outside pause/resume and rating impact remain unproved. |
