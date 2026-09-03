@@ -48,6 +48,10 @@ type Assumptions = {
   discount: number;
   periods: number;
   storageGb: number;
+  erisEnabled: boolean;
+  erisIntensity: number;
+  erisQualifyingShare: number;
+  erisCeilingRealised: number;
 };
 
 type WebMcpTool = {
@@ -74,6 +78,10 @@ const defaults: Assumptions = {
   discount: 25,
   periods: 18,
   storageGb: 100,
+  erisEnabled: false,
+  erisIntensity: 35,
+  erisQualifyingShare: 100,
+  erisCeilingRealised: 100,
 };
 
 const presets: Record<string, Pick<Assumptions, 'idleFill' | 'hostRate' | 'discount'>> = {
@@ -99,9 +107,18 @@ function compute(a: Assumptions) {
   const income = (rentedGpuHours * a.hostRate) / USD_PER_GBP;
   const scanCost = SCAN_PUBLIC_EX_VAT * (1 - a.discount / 100);
   const storage = (a.storageGb * STORAGE_USD_PER_GB_MONTH) / USD_PER_GBP;
-  const effective = scanCost + storage - income;
+  const effectiveBeforeEris = scanCost + storage - income;
+  const meetsErisIntensity = a.erisIntensity >= 30;
+  const erisQualifyingSpend = scanCost * (a.erisQualifyingShare / 100);
+  const erisMaximumCash = erisQualifyingSpend * 1.86 * 0.145;
+  const erisCash =
+    a.erisEnabled && meetsErisIntensity
+      ? erisMaximumCash * (a.erisCeilingRealised / 100)
+      : 0;
+  const effective = effectiveBeforeEris - erisCash;
   const maxIncome = (sellableGpuHours * a.hostRate) / USD_PER_GBP;
-  const breakEvenFill = maxIncome > 0 ? ((scanCost + storage) / maxIncome) * 100 : Infinity;
+  const breakEvenFill =
+    maxIncome > 0 ? (Math.max(0, scanCost + storage - erisCash) / maxIncome) * 100 : Infinity;
 
   return {
     ownerGpuHours,
@@ -109,10 +126,16 @@ function compute(a: Assumptions) {
     income,
     scanCost,
     storage,
+    effectiveBeforeEris,
+    meetsErisIntensity,
+    erisQualifyingSpend,
+    erisMaximumCash,
+    erisCash,
     effective,
     termEffective: effective * a.periods,
     termScanCost: scanCost * a.periods,
     termIncome: income * a.periods,
+    termErisCash: erisCash * a.periods,
     breakEvenFill,
     effectivePerOwnerHour: ownerGpuHours > 0 ? effective / ownerGpuHours : null,
   };
@@ -205,13 +228,16 @@ export function GpuEconomicsLab() {
     if (!context?.registerTool) return;
 
     const lifecycle = new AbortController();
-    const ranges: Record<keyof Assumptions, [number, number]> = {
+    const ranges: Record<Exclude<keyof Assumptions, 'erisEnabled'>, [number, number]> = {
       ownerUse: [0, 90],
       idleFill: [10, 100],
       hostRate: [0.3, 1.5],
       discount: [0, 40],
       periods: [12, 36],
       storageGb: [0, 300],
+      erisIntensity: [0, 100],
+      erisQualifyingShare: [0, 100],
+      erisCeilingRealised: [0, 100],
     };
 
     const register = context.registerTool(
@@ -219,7 +245,7 @@ export function GpuEconomicsLab() {
         name: 'set_gpu_economics_assumptions',
         title: 'Set GPU economics assumptions',
         description:
-          'Update one or more visible Sqwish GPU Slack Lab assumptions and return the recalculated ex-VAT result.',
+          'Update one or more visible Sqwish GPU Slack Lab assumptions, including the optional ERIS view, and return the recalculated ex-VAT result.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -229,6 +255,10 @@ export function GpuEconomicsLab() {
             discount: { type: 'number', minimum: 0, maximum: 40 },
             periods: { type: 'number', minimum: 12, maximum: 36 },
             storageGb: { type: 'number', minimum: 0, maximum: 300 },
+            erisEnabled: { type: 'boolean' },
+            erisIntensity: { type: 'number', minimum: 0, maximum: 100 },
+            erisQualifyingShare: { type: 'number', minimum: 0, maximum: 100 },
+            erisCeilingRealised: { type: 'number', minimum: 0, maximum: 100 },
           },
           minProperties: 1,
           additionalProperties: false,
@@ -241,13 +271,21 @@ export function GpuEconomicsLab() {
           const entries = Object.entries(input as Record<string, unknown>);
           if (entries.length === 0) throw new Error('Provide at least one assumption.');
 
-          const allowed = new Set(Object.keys(ranges));
+          const allowed = new Set([...Object.keys(ranges), 'erisEnabled']);
           const next = { ...assumptionsRef.current };
           for (const [key, raw] of entries) {
-            if (!allowed.has(key) || typeof raw !== 'number' || !Number.isFinite(raw)) {
+            if (!allowed.has(key)) {
               throw new Error(`Invalid assumption: ${key}`);
             }
-            const typedKey = key as keyof Assumptions;
+            if (key === 'erisEnabled') {
+              if (typeof raw !== 'boolean') throw new Error('erisEnabled must be a boolean.');
+              next.erisEnabled = raw;
+              continue;
+            }
+            if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+              throw new Error(`Invalid assumption: ${key}`);
+            }
+            const typedKey = key as Exclude<keyof Assumptions, 'erisEnabled'>;
             const [minimum, maximum] = ranges[typedKey];
             if (raw < minimum || raw > maximum) {
               throw new Error(`${key} must be between ${minimum} and ${maximum}.`);
@@ -263,6 +301,7 @@ export function GpuEconomicsLab() {
             assumptions: next,
             effectiveCostGbp: Number(recalculated.effective.toFixed(2)),
             rentalIncomeGbp: Number(recalculated.income.toFixed(2)),
+            illustrativeErisCashGbp: Number(recalculated.erisCash.toFixed(2)),
             termEffectiveCostGbp: Number(recalculated.termEffective.toFixed(2)),
           };
         },
@@ -459,6 +498,79 @@ export function GpuEconomicsLab() {
                   );
                 })}
               </div>
+              <div
+                className={
+                  assumptions.erisEnabled
+                    ? 'rounded-xl border border-primary/35 bg-primary/[0.055] p-3'
+                    : 'rounded-xl border border-border/80 bg-muted/20 p-3'
+                }
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Illustrative ERIS cash credit</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      Cash-equivalent view for a qualifying loss-making R&amp;D-intensive SME.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={assumptions.erisEnabled ? 'default' : 'outline'}
+                    className="min-h-11 min-w-28"
+                    aria-pressed={assumptions.erisEnabled}
+                    onClick={() => update('erisEnabled', !assumptions.erisEnabled)}
+                  >
+                    <BadgePoundSterling /> ERIS {assumptions.erisEnabled ? 'on' : 'off'}
+                  </Button>
+                </div>
+                {assumptions.erisEnabled && (
+                  <div className="mt-4 space-y-5 border-t border-primary/20 pt-4">
+                    <Control
+                      label="Company R&D intensity"
+                      value={assumptions.erisIntensity}
+                      display={`${assumptions.erisIntensity.toFixed(0)}%`}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onChange={(value) => update('erisIntensity', value)}
+                    />
+                    <Control
+                      label="Qualifying share of SCAN bill"
+                      value={assumptions.erisQualifyingShare}
+                      display={`${assumptions.erisQualifyingShare.toFixed(0)}%`}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onChange={(value) => update('erisQualifyingShare', value)}
+                    />
+                    <Control
+                      label="ERIS ceiling claimable"
+                      value={assumptions.erisCeilingRealised}
+                      display={`${assumptions.erisCeilingRealised.toFixed(0)}%`}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onChange={(value) => update('erisCeilingRealised', value)}
+                    />
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      The selected {assumptions.erisQualifyingShare.toFixed(0)}% bill share is
+                      Sqwish&apos;s planning assumption. HMRC requires direct qualifying R&amp;D use; the
+                      maximum 26.97p/£ also needs enough current-period surrenderable tax loss and
+                      PAYE/NIC-cap headroom. Vast income can reduce that loss.
+                    </p>
+                    <p
+                      className={
+                        result.meetsErisIntensity
+                          ? 'text-xs font-semibold text-primary'
+                          : 'text-xs font-semibold text-destructive'
+                      }
+                    >
+                      {result.meetsErisIntensity
+                        ? `Intensity gate passes at ${assumptions.erisIntensity.toFixed(0)}% (30% threshold).`
+                        : `No ERIS credit shown: ${assumptions.erisIntensity.toFixed(0)}% is below the 30% threshold.`}
+                    </p>
+                  </div>
+                )}
+              </div>
               <Control
                 label="Sqwish owner allocation"
                 value={assumptions.ownerUse}
@@ -534,10 +646,11 @@ export function GpuEconomicsLab() {
                       {money.format(result.effective)}
                     </p>
                     <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                      Discounted SCAN cost, minus Vast compute income, plus the conservative displayed charge for stopped owner-template storage.
+                      Discounted SCAN cost, minus Vast compute income, plus stopped owner-template
+                      storage{assumptions.erisEnabled ? ', then less the illustrative ERIS cash-equivalent credit.' : '.'}
                     </p>
                   </div>
-                  <div className="mt-8 grid grid-cols-2 gap-3 border-t border-primary/20 pt-5 sm:grid-cols-3">
+                  <div className="mt-8 grid grid-cols-2 gap-3 border-t border-primary/20 pt-5 sm:grid-cols-4">
                     <div>
                       <p className="stat-label">SCAN</p>
                       <p className="stat-value">{money.format(result.scanCost)}</p>
@@ -546,9 +659,15 @@ export function GpuEconomicsLab() {
                       <p className="stat-label">Vast income</p>
                       <p className="stat-value text-primary">−{money.format(result.income)}</p>
                     </div>
-                    <div className="col-span-2 sm:col-span-1">
+                    <div>
                       <p className="stat-label">Stopped disk</p>
                       <p className="stat-value">+{money.format(result.storage)}</p>
+                    </div>
+                    <div>
+                      <p className="stat-label">ERIS cash</p>
+                      <p className={assumptions.erisEnabled ? 'stat-value text-primary' : 'stat-value text-muted-foreground'}>
+                        {assumptions.erisEnabled ? `−${money.format(result.erisCash)}` : 'Off'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -557,7 +676,7 @@ export function GpuEconomicsLab() {
                   <Metric
                     label={`${assumptions.periods}-period cost`}
                     value={money.format(result.termEffective)}
-                    note={`${money.format(result.termScanCost)} SCAN less ${money.format(result.termIncome)} compute income.`}
+                    note={`${money.format(result.termScanCost)} SCAN less ${money.format(result.termIncome)} compute income${assumptions.erisEnabled ? ` and ${money.format(result.termErisCash)} illustrative ERIS cash` : ''}.`}
                     accent
                   />
                   <Metric
@@ -633,6 +752,52 @@ export function GpuEconomicsLab() {
           </div>
         </section>
 
+        <section className="mb-4" aria-labelledby="eris-method-title">
+          <Card className="border-primary/20 bg-card/80">
+            <CardHeader className="border-b border-border/70">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle id="eris-method-title" className="flex items-center gap-2">
+                    <BadgePoundSterling className="size-4 text-primary" /> How the ERIS option works
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    A cash-equivalent planning layer, separate from the monthly operating cash flow.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="border-primary/30 bg-primary/5 text-primary">
+                  Up to 26.97p / qualifying £
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <div className="evidence-card">
+                <p className="evidence-kicker">Eligibility gate</p>
+                <p className="evidence-number">30% tax-R&amp;D intensity</p>
+                <p className="evidence-copy">
+                  Sqwish must be an eligible SME with a current-period tax trading loss before the
+                  extra 86% deduction. The ratio includes connected companies; a one-period grace can apply.
+                </p>
+              </div>
+              <div className="evidence-card border-primary/25 bg-primary/[0.045]">
+                <p className="evidence-kicker text-primary">Selected assumption</p>
+                <p className="evidence-number">{assumptions.erisQualifyingShare.toFixed(0)}% of SCAN</p>
+                <p className="evidence-copy">
+                  The model treats this share of the paid hosted-service bill as direct qualifying R&amp;D.
+                  HMRC allows cloud hardware facilities, but excludes rent, leases, capital spend and non-R&amp;D use.
+                </p>
+              </div>
+              <div className="evidence-card">
+                <p className="evidence-kicker">Cash timing and ceiling</p>
+                <p className="evidence-number">Claimed after the period</p>
+                <p className="evidence-copy">
+                  The displayed credit is 14.5% of up to 186% of qualifying spend, scaled by the selected
+                  claimable ceiling. It assumes sufficient surrenderable loss and PAYE/NIC-cap headroom.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
         <section className="grid gap-4 lg:grid-cols-3">
           <Card className="border-border/80 bg-card/80 lg:col-span-2">
             <CardHeader>
@@ -686,7 +851,7 @@ export function GpuEconomicsLab() {
 
         <footer className="mt-6 flex flex-col gap-3 border-t border-border/70 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-2">
-            <Asterisk className="size-3 text-primary" /> Planning model, checked 2 September 2026. Market data moves.
+            <Asterisk className="size-3 text-primary" /> Planning model, tax rules checked 3 September 2026. Market data moves.
           </p>
           <div className="flex flex-wrap gap-x-4 gap-y-2">
             <a className="source-link" href="https://www.scan.co.uk/products/3xs-sc-pb4-32t-1-month-4x-96gb-nvidia-rtx-pro-6000-512gb-ddr5-ecc-amd-epyc-9354p" target="_blank" rel="noreferrer">SCAN price <ExternalLink /></a>
@@ -696,6 +861,8 @@ export function GpuEconomicsLab() {
             <a className="source-link" href="https://docs.vast.ai/guides/instances/choosing/instance-types" target="_blank" rel="noreferrer">Instance priorities <ExternalLink /></a>
             <a className="source-link" href="https://docs.vast.ai/cli/reference/start-instance" target="_blank" rel="noreferrer">Start standby <ExternalLink /></a>
             <a className="source-link" href="https://www.usenix.org/system/files/atc19-jeon.pdf" target="_blank" rel="noreferrer">Workload evidence <ExternalLink /></a>
+            <a className="source-link" href="https://www.gov.uk/guidance/research-and-development-rd-tax-relief-the-merged-scheme-and-enhanced-rd-intensive-support" target="_blank" rel="noreferrer">ERIS rules <ExternalLink /></a>
+            <a className="source-link" href="https://www.gov.uk/guidance/check-what-research-and-development-rd-costs-you-can-claim" target="_blank" rel="noreferrer">Qualifying costs <ExternalLink /></a>
           </div>
         </footer>
       </div>

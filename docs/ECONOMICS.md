@@ -211,6 +211,33 @@ This template pool is an intended design, not yet a proved Vast guarantee. The p
 
 ## Formula and calculator
 
+### Optional ERIS cash-credit view
+
+The public calculator now has an **ERIS off/on** button. It is off by default so the operating case remains comparable with the earlier model. When enabled, the Sqwish planning preset uses:
+
+- 35% company R&D intensity, above the 30% statutory threshold;
+- 100% of the discounted SCAN hosted-service bill as the selected qualifying-cost assumption; and
+- 100% of the theoretical credit ceiling as claimable.
+
+The last two inputs are deliberately visible. They are assumptions, not conclusions about Sqwish's tax return. The 100% SCAN selection records the requested upside case. HMRC permits cloud hardware-facility costs when they are employed directly in qualifying R&D, but rent, equipment leases, capital expenditure and non-R&D use do not qualify under this category. Contract classification and direct-use records therefore need accountant confirmation before a claim. Whether Vast proceeds are left as platform credit or paid out does not establish their UK accounting or tax treatment; the model continues to show those proceeds as income, and they may reduce the current-period tax trading loss available for ERIS.
+
+For the dashboard's 30-day cash-equivalent view:
+
+```text
+qualifying_SCAN_spend = discounted_SCAN_cost × selected_qualifying_share
+maximum_ERIS_cash = qualifying_SCAN_spend × 186% × 14.5%
+displayed_ERIS_cash = maximum_ERIS_cash × selected_claimable_ceiling
+post_ERIS_effective_cost = pre_ERIS_effective_cost − displayed_ERIS_cash
+```
+
+The maximum is **26.97p per qualifying £**, not the automatic rate for every loss-making company. The real credit is 14.5% of the surrenderable loss: broadly the lower of 186% of qualifying expenditure and the available current-period tax loss after the 86% additional deduction and relevant offsets. It is also limited by the PAYE/NIC cap unless an exemption is established. A company that is only slightly loss-making can receive materially less than 26.97%; the dashboard's **ERIS ceiling claimable** slider exists to stress-test that difference.
+
+The 30% intensity input is a simplified gate. The statutory ratio aggregates qualifying tax-R&D expenditure and total relevant expenditure for Sqwish and connected companies worldwide. Loss-making means a current-period tax trading loss before the 86% additional deduction, after ordinary expenses and Vast income. A one-period grace can sometimes preserve intensity eligibility. The calculator does not establish the SME test, project qualification, connected-company aggregation, surrenderable loss, PAYE/NIC cap, claim notification, offsets or cash timing.
+
+ERIS is normally claimed for an accounting period, so the displayed amount is a planning allocation rather than a monthly rebate from SCAN. Source rules checked 3 September 2026: [current ERIS guidance](https://www.gov.uk/guidance/research-and-development-rd-tax-relief-the-merged-scheme-and-enhanced-rd-intensive-support), [HMRC intensity calculation](https://www.gov.uk/hmrc-internal-manuals/corporate-intangibles-research-and-development-manual/cird123000), [HMRC ERIS calculation](https://www.gov.uk/hmrc-internal-manuals/corporate-intangibles-research-and-development-manual/cird122000), [PAYE/NIC cap](https://www.gov.uk/hmrc-internal-manuals/corporate-intangibles-research-and-development-manual/cird140000), and [qualifying cloud costs](https://www.gov.uk/guidance/check-what-research-and-development-rd-costs-you-can-claim).
+
+### Core hosting model
+
 For a 30-day period:
 
 ```text
